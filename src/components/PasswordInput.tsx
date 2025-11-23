@@ -1,6 +1,6 @@
 // src/components/PasswordInput.tsx
 import React, { useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, TextInput, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, LAYOUT } from '../styles/theme';
 
@@ -13,7 +13,9 @@ type Props = {
 };
 
 export default function PasswordInput({ label, value, onChangeText, placeholder, error }: Props) {
-  const [show, setShow] = useState(false);
+  // Defaulting to true so password is VISIBLE initially as requested
+  const [show, setShow] = useState(true);
+
   return (
     <View style={{ marginBottom: 14 }}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
@@ -25,12 +27,22 @@ export default function PasswordInput({ label, value, onChangeText, placeholder,
           placeholder={placeholder}
           placeholderTextColor="#7A7A7A"
           style={styles.input}
+          
+          // Stability props
           autoCapitalize="none"
           autoCorrect={false}
-          textContentType="none" // Helps prevent some keyboard flickering
-          autoComplete="off"
+          spellCheck={false}
+          textContentType="password" 
+          importantForAutofill="yes"
+          
+          // Fix for jumping font on Android
+          {...(Platform.OS === 'android' ? { includeFontPadding: false } : {})}
         />
-        <TouchableOpacity onPress={() => setShow(s => !s)} style={{ paddingHorizontal: 12 }}>
+        <TouchableOpacity 
+          onPress={() => setShow(s => !s)} 
+          style={styles.eyeBtn}
+          activeOpacity={0.7}
+        >
           <Ionicons name={show ? 'eye-off' : 'eye'} size={20} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
@@ -48,8 +60,21 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     backgroundColor: '#0C0E0B', 
     borderWidth: 1, 
-    borderColor: 'transparent' 
+    borderColor: 'transparent',
+    overflow: 'hidden'
   },
-  input: { flex: 1, paddingHorizontal: 12, color: COLORS.textPrimary, fontSize: 16, height: '100%' },
+  input: { 
+    flex: 1, 
+    paddingHorizontal: 12, 
+    color: COLORS.textPrimary, 
+    fontSize: 16, 
+    height: '100%',
+    fontVariant: ['tabular-nums'],
+  },
+  eyeBtn: {
+    height: '100%',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
   err: { color: COLORS.error, marginTop: 6, fontSize: 12 },
 });

@@ -11,6 +11,7 @@ import {
   Alert,
   Modal,
   useWindowDimensions,
+  ScrollView,
 } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import AppInput from '../components/AppInput';
@@ -33,13 +34,11 @@ const parseDate = (str: string) => {
   const d = parseInt(parts[1], 10);
   const y = parseInt(parts[2], 10);
   
-  // Basic sanity checks
   if (m < 1 || m > 12) return null;
   if (d < 1 || d > 31) return null;
   if (y < 1900 || y > new Date().getFullYear()) return null;
 
   const date = new Date(y, m - 1, d);
-  // check if date is valid (e.g. not 31st of Feb)
   if (date.getFullYear() !== y || date.getMonth() + 1 !== m || date.getDate() !== d) {
     return null;
   }
@@ -48,33 +47,32 @@ const parseDate = (str: string) => {
 
 const schema = yup.object({
   firstName: yup.string().required('First name is required'),
-  lastName: yup.string(), // Optional now
+  lastName: yup.string(),
   dob: yup
     .string()
     .required('Date of birth required')
     .matches(/^\d{2}\/\d{2}\/\d{4}$/, 'Format: MM/DD/YYYY')
-    .test('is-valid-date', 'Invalid date or month', (val) => !!(val && parseDate(val)))
+    .test('is-valid-date', 'Invalid date', (val) => !!(val && parseDate(val)))
     .test('is-18', 'Must be at least 18 years old', (val) => {
       if (!val) return false;
       const date = parseDate(val);
       if (!date) return false;
       const today = new Date();
-      const age = today.getFullYear() - date.getFullYear();
+      let age = today.getFullYear() - date.getFullYear();
       const m = today.getMonth() - date.getMonth();
       if (m < 0 || (m === 0 && today.getDate() < date.getDate())) {
-        return (age - 1) >= 18;
+        age--;
       }
       return age >= 18;
     }),
-  phone: yup.string().required('Phone required').matches(/^\d{10}$/, 'Must be exactly 10 digits'),
+  phone: yup.string().required('Phone required').matches(/^\d{10}$/, 'Must be 10 digits'),
   password: yup
     .string()
     .required('Password required')
     .min(6, 'Min 6 characters')
-    .matches(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/, 'Must contain letters and numbers'),
+    .matches(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/, 'Alphanumeric (letters + numbers)'),
   agent: yup.string().required('Agent name required'),
   
-  // 3 Mandatory Emergency Contacts
   ec1Name: yup.string().required('Contact 1 name required'),
   ec1Phone: yup.string().required('Contact 1 phone required').matches(/^\d{10}$/, 'Must be 10 digits'),
   
@@ -85,20 +83,51 @@ const schema = yup.object({
   ec3Phone: yup.string().required('Contact 3 phone required').matches(/^\d{10}$/, 'Must be 10 digits'),
 }).required();
 
+/* ---------- Helper Components (Defined Outside) ---------- */
+const CountryPill = () => (
+  <View style={styles.countryPill}>
+    <Text style={styles.countryText}>🇺🇸 +1</Text>
+  </View>
+);
+
+const PhoneField = ({ controlName, label, control, error }: any) => (
+  <View style={{ marginBottom: 14 }}>
+    {label && <Text style={styles.label}>{label}</Text>}
+    <View style={styles.phoneRow}>
+      <CountryPill />
+      <View style={{ flex: 1 }}>
+        <Controller
+          control={control}
+          name={controlName}
+          render={({ field }) => (
+            <AppInput
+              value={field.value}
+              onChangeText={field.onChange}
+              keyboardType="phone-pad"
+              placeholder="5551234567"
+              style={{ marginBottom: 0 }}
+              error={null} 
+            />
+          )}
+        />
+      </View>
+    </View>
+    {error && <Text style={styles.errText}>{error}</Text>}
+  </View>
+);
+
 export default function SignUp({ navigation }: any) {
   const { width } = useWindowDimensions();
   const headingAnim = useRef(new Animated.Value(0)).current;
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  
+  const [formData, setFormData] = useState<any>(null);
 
   const isTabletOrWeb = width > 600;
   const formWidth = isTabletOrWeb ? 500 : '100%';
 
   useEffect(() => {
-    Animated.timing(headingAnim, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
+    Animated.timing(headingAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
   }, []);
 
   const { control, handleSubmit, formState, setValue } = useForm({
@@ -107,63 +136,34 @@ export default function SignUp({ navigation }: any) {
       ec1Name: '', ec1Phone: '', ec2Name: '', ec2Phone: '', ec3Name: '', ec3Phone: '',
     },
     resolver: yupResolver(schema),
-    mode: 'onChange', // Triggers validation while typing
+    mode: 'onChange',
   });
 
-  const onSubmit = (data: any) => {
-    demoStore.setUser({
-      id: Math.random().toString(36).slice(2, 9),
-      firstName: data.firstName,
-      lastName: data.lastName || '',
-      dob: data.dob,
-      phone: `+1${data.phone}`,
-      agent: data.agent,
-      emergencyContacts: [
-        { name: data.ec1Name, phone: `+1${data.ec1Phone}` },
-        { name: data.ec2Name, phone: `+1${data.ec2Phone}` },
-        { name: data.ec3Name, phone: `+1${data.ec3Phone}` },
-      ],
-    });
-    setShowDisclaimer(false);
-    Alert.alert('Success', 'Account created successfully.', [
-      { text: 'Go to Dashboard', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] }) }
-    ]);
+  const onPreSubmit = (data: any) => {
+    setFormData(data);
+    setShowDisclaimer(true);
   };
 
-  const CountryPill = () => (
-    <View style={styles.countryPill}>
-      <Text style={styles.countryText}>🇺🇸 +1</Text>
-    </View>
-  );
+  const onConsent = () => {
+    if (!formData) return;
 
-  // Reusable Phone Row Component
-  const PhoneField = ({ controlName, label, control, error }: any) => (
-    <View style={{ marginBottom: 14 }}>
-      {label && <Text style={styles.label}>{label}</Text>}
-      <View style={styles.phoneRow}>
-        <CountryPill />
-        <View style={{ flex: 1 }}>
-          <Controller
-            control={control}
-            name={controlName}
-            render={({ field }) => (
-              <AppInput
-                value={field.value}
-                onChangeText={field.onChange}
-                keyboardType="phone-pad"
-                placeholder="5551234567"
-                style={{ marginBottom: 0 }}
-                // We pass error to AppInput to color the border red
-                error={null} 
-              />
-            )}
-          />
-        </View>
-      </View>
-      {/* Render error outside because AppInput inside row is tight */}
-      {error && <Text style={styles.errText}>{error}</Text>}
-    </View>
-  );
+    demoStore.setUser({
+      id: Math.random().toString(36).slice(2, 9),
+      firstName: formData.firstName,
+      lastName: formData.lastName || '',
+      dob: formData.dob,
+      phone: `+1${formData.phone}`,
+      agent: formData.agent,
+      emergencyContacts: [
+        { name: formData.ec1Name, phone: `+1${formData.ec1Phone}` },
+        { name: formData.ec2Name, phone: `+1${formData.ec2Phone}` },
+        { name: formData.ec3Name, phone: `+1${formData.ec3Phone}` },
+      ],
+    });
+
+    setShowDisclaimer(false);
+    navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] });
+  };
 
   return (
     <ScreenContainer scrollable>
@@ -181,9 +181,7 @@ export default function SignUp({ navigation }: any) {
 
         <View style={[styles.card, { width: formWidth }]}>
           
-          {/* Personal Details */}
           <Text style={styles.sectionTitle}>Personal Details</Text>
-          
           <View style={styles.row}>
             <View style={{ flex: 1, marginRight: 8 }}>
               <Controller control={control} name="firstName" render={({ field, fieldState }) => (
@@ -198,20 +196,10 @@ export default function SignUp({ navigation }: any) {
           </View>
 
           <Controller control={control} name="dob" render={({ field, fieldState }) => (
-            <DatePickerField 
-              label="Date of Birth" 
-              value={field.value} 
-              onChange={(v) => setValue('dob', v, { shouldValidate: true })} 
-              error={fieldState.error?.message} 
-            />
+            <DatePickerField label="Date of Birth" value={field.value} onChange={(v) => setValue('dob', v, { shouldValidate: true })} error={fieldState.error?.message} />
           )} />
 
-          <PhoneField 
-            controlName="phone" 
-            label="Phone Number" 
-            control={control} 
-            error={formState.errors.phone?.message} 
-          />
+          <PhoneField controlName="phone" label="Phone Number" control={control} error={formState.errors.phone?.message} />
 
           <Controller control={control} name="agent" render={({ field, fieldState }) => (
             <AppInput label="Agent Name" icon="business-outline" placeholder="Assigned Agent" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
@@ -226,7 +214,6 @@ export default function SignUp({ navigation }: any) {
 
           <View style={styles.divider} />
 
-          {/* Emergency Contacts - All 3 Required */}
           <Text style={styles.sectionTitle}>Emergency Contacts</Text>
           <Text style={styles.sectionSub}>3 contacts are required for maximum safety.</Text>
 
@@ -255,7 +242,7 @@ export default function SignUp({ navigation }: any) {
 
           <AppButton 
             title="Create Account" 
-            onPress={handleSubmit(() => setShowDisclaimer(true))} 
+            onPress={handleSubmit(onPreSubmit)} 
             disabled={!formState.isValid} 
           />
           
@@ -264,23 +251,36 @@ export default function SignUp({ navigation }: any) {
           </TouchableOpacity>
 
         </View>
-        
         <View style={{ height: 40 }} /> 
       </KeyboardAvoidingView>
 
-      {/* Disclaimer Modal */}
+      {/* DISCLAIMER MODAL */}
       <Modal visible={showDisclaimer} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Ionicons name="shield-checkmark" size={42} color={COLORS.accent} style={{ marginBottom: 12 }} />
-            <Text style={styles.modalTitle}>Data Privacy Consent</Text>
-            <Text style={styles.modalText}>
-              Your safety is our priority. By continuing, you agree that your location and emergency contact details will only be used to trigger SOS alerts when you press the panic button.
-            </Text>
-            <View style={styles.modalActions}>
-              <AppButton title="Cancel" onPress={() => setShowDisclaimer(false)} variant="ghost" style={{ flex: 1, marginRight: 8 }} />
-              <AppButton title="I Agree" onPress={handleSubmit(onSubmit)} style={{ flex: 1, marginLeft: 8 }} />
-            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                <Ionicons name="document-text-outline" size={40} color={COLORS.accent} />
+                <Text style={styles.modalTitle}>Terms & Data Consent</Text>
+              </View>
+              
+              <Text style={styles.modalText}>
+                <Text style={{ fontWeight: 'bold', color: '#fff' }}>By using the Bond App,</Text> you expressly consent to the collection, storage, and processing of the personal information provided, including your real-time location, personal identification, and emergency contact details.
+              </Text>
+              
+              <Text style={styles.modalText}>
+                You grant the Bond App permission to access and utilize your device's <Text style={{ fontWeight: 'bold', color: '#fff' }}>geolocation data</Text> solely for the purpose of deploying emergency assistance and facilitating rapid response services.
+              </Text>
+
+              <Text style={styles.modalText}>
+                You understand that this data may be transmitted to your designated emergency contacts and/or safety agents in the event of a panic alert. Your data will be handled in strict accordance with applicable United States privacy laws and will not be used for unauthorized commercial purposes.
+              </Text>
+
+              <View style={{ height: 20 }} />
+              
+              <AppButton title="I Agree & Create Account" onPress={onConsent} />
+              <AppButton title="Cancel" onPress={() => setShowDisclaimer(false)} variant="ghost" />
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -289,7 +289,6 @@ export default function SignUp({ navigation }: any) {
   );
 }
 
-/*Styles*/
 const styles = StyleSheet.create({
   header: { width: '100%', marginBottom: 20, marginTop: 10, flexDirection: 'row', alignItems: 'center' },
   backBtn: { padding: 8, marginRight: 8, borderRadius: 999, backgroundColor: '#1A2018' },
@@ -320,9 +319,21 @@ const styles = StyleSheet.create({
   errText: { color: COLORS.error, marginTop: 6, fontSize: 12 },
 
   /* Modal */
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalCard: { backgroundColor: '#141812', padding: 24, borderRadius: 20, width: '100%', maxWidth: 400, alignItems: 'center', borderWidth: 1, borderColor: '#2A3028' },
-  modalTitle: { color: COLORS.textPrimary, fontSize: 20, fontWeight: 'bold', marginBottom: 12 },
-  modalText: { color: COLORS.textSecondary, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-  modalActions: { flexDirection: 'row', width: '100%' }
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalCard: { 
+    backgroundColor: '#141812', 
+    padding: 24, 
+    borderRadius: 20, 
+    width: '100%', 
+    maxWidth: 480, 
+    maxHeight: '80%',
+    borderWidth: 1, 
+    borderColor: '#2A3028',
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10
+  },
+  modalTitle: { color: COLORS.textPrimary, fontSize: 20, fontWeight: 'bold', marginTop: 10 },
+  modalText: { color: COLORS.textSecondary, marginBottom: 16, lineHeight: 22, fontSize: 14 },
 });
