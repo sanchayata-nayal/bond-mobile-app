@@ -63,7 +63,7 @@ export default function UserLanding({ navigation }: any) {
   return (
     <ScreenContainer scrollable={false}>
       <DashboardHeader 
-        title="Bond" 
+        title="All State Bail Bond Services"
         userInitial={user?.firstName || 'U'} 
         onMenuPress={() => setMenuOpen(true)} 
       />

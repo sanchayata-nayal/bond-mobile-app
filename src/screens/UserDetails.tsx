@@ -7,13 +7,14 @@ import {
   Alert, 
   KeyboardAvoidingView, 
   Platform, 
-  TouchableOpacity // <--- Added this missing import
+  TouchableOpacity 
 } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import DashboardHeader from '../components/DashboardHeader';
 import AppInput from '../components/AppInput';
 import AppButton from '../components/AppButton';
 import DatePickerField from '../components/DatePickerField';
+import Collapsible from '../components/Collapsible'; // Reusing for edit mode
 import { demoStore } from '../services/demoStore';
 import { COLORS } from '../styles/theme';
 import { useForm, Controller } from 'react-hook-form';
@@ -21,13 +22,20 @@ import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { Ionicons } from '@expo/vector-icons';
 
-/* ---------- Validation Schema ---------- */
+/* ---------- Expanded Schema ---------- */
 const schema = yup.object({
   firstName: yup.string().required('First name is required'),
   lastName: yup.string(),
   dob: yup.string().required('Date of birth required'),
   phone: yup.string().required('Phone required').matches(/^\d{10}$/, '10 digits required'),
   agent: yup.string().required('Agent required'),
+  // Emergency Contacts
+  ec1Name: yup.string().required('Contact 1 Name required'),
+  ec1Phone: yup.string().required('Contact 1 Phone required').matches(/^\d{10}$/, '10 digits required'),
+  ec2Name: yup.string().required('Contact 2 Name required'),
+  ec2Phone: yup.string().required('Contact 2 Phone required').matches(/^\d{10}$/, '10 digits required'),
+  ec3Name: yup.string().required('Contact 3 Name required'),
+  ec3Phone: yup.string().required('Contact 3 Phone required').matches(/^\d{10}$/, '10 digits required'),
 }).required();
 
 export default function UserDetails({ navigation }: any) {
@@ -41,12 +49,20 @@ export default function UserDetails({ navigation }: any) {
       dob: user?.dob || '',
       phone: user?.phone?.replace('+1', '') || '',
       agent: user?.agent || '',
+      // Map existing contacts to form fields
+      ec1Name: user?.emergencyContacts?.[0]?.name || '',
+      ec1Phone: user?.emergencyContacts?.[0]?.phone?.replace('+1', '') || '',
+      ec2Name: user?.emergencyContacts?.[1]?.name || '',
+      ec2Phone: user?.emergencyContacts?.[1]?.phone?.replace('+1', '') || '',
+      ec3Name: user?.emergencyContacts?.[2]?.name || '',
+      ec3Phone: user?.emergencyContacts?.[2]?.phone?.replace('+1', '') || '',
     },
     resolver: yupResolver(schema),
   });
 
   const handleSave = (data: any) => {
     if (user) {
+      // Reconstruct user object
       demoStore.setUser({
         ...user,
         firstName: data.firstName,
@@ -54,10 +70,15 @@ export default function UserDetails({ navigation }: any) {
         dob: data.dob,
         phone: `+1${data.phone}`,
         agent: data.agent,
+        emergencyContacts: [
+          { name: data.ec1Name, phone: `+1${data.ec1Phone}` },
+          { name: data.ec2Name, phone: `+1${data.ec2Phone}` },
+          { name: data.ec3Name, phone: `+1${data.ec3Phone}` },
+        ]
       });
     }
     setIsEditing(false);
-    Alert.alert('Updated', 'Your profile has been updated.');
+    Alert.alert('Success', 'Your profile has been updated successfully.');
   };
 
   const handleCancel = () => {
@@ -65,11 +86,11 @@ export default function UserDetails({ navigation }: any) {
     setIsEditing(false);
   };
 
-  const handleDelete = () => {
-    Alert.alert('Delete Account', 'Are you sure? This action cannot be undone.', [
+  const handleLogout = () => {
+    Alert.alert('Log Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
       { 
-        text: 'Delete', 
+        text: 'Log Out', 
         style: 'destructive', 
         onPress: () => {
           demoStore.clear();
@@ -79,10 +100,43 @@ export default function UserDetails({ navigation }: any) {
     ]);
   };
 
+  const handleDelete = () => {
+    Alert.alert(
+      '⚠️ Delete Account', 
+      'This will permanently delete your account and all associated data. You will lose access to emergency services.\n\nAre you absolutely sure?', 
+      [
+        { text: 'Keep Account', style: 'cancel' },
+        { 
+          text: 'Delete Forever', 
+          style: 'destructive', 
+          onPress: () => {
+            demoStore.clear();
+            navigation.reset({ index: 0, routes: [{ name: 'Starting' }] });
+          }
+        }
+      ]
+    );
+  };
+
   const InfoRow = ({ label, value }: { label: string, value: string }) => (
     <View style={styles.infoRow}>
       <Text style={styles.label}>{label}</Text>
       <Text style={styles.value}>{value || '-'}</Text>
+    </View>
+  );
+
+  const ContactCard = ({ contact, index }: { contact: any, index: number }) => (
+    <View style={styles.contactCard}>
+      <View style={styles.contactHeader}>
+        <View style={styles.contactBadge}>
+          <Text style={styles.contactBadgeText}>{index + 1}</Text>
+        </View>
+        <Text style={styles.contactName}>{contact.name}</Text>
+      </View>
+      <View style={styles.contactBody}>
+        <Ionicons name="call-outline" size={16} color={COLORS.textSecondary} style={{ marginRight: 8 }} />
+        <Text style={styles.contactPhone}>{contact.phone}</Text>
+      </View>
     </View>
   );
 
@@ -103,13 +157,13 @@ export default function UserDetails({ navigation }: any) {
             <Text style={styles.sectionTitle}>Personal Details</Text>
             {!isEditing && (
               <TouchableOpacity onPress={() => setIsEditing(true)} activeOpacity={0.7}>
-                <Text style={styles.editLink}>Edit</Text>
+                <Text style={styles.editLink}>Edit Profile</Text>
               </TouchableOpacity>
             )}
           </View>
 
           {isEditing ? (
-            /* EDIT MODE FORM */
+            /* ---- EDIT MODE ---- */
             <View>
               <Controller control={control} name="firstName" render={({ field, fieldState }) => (
                 <AppInput label="First Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
@@ -127,44 +181,64 @@ export default function UserDetails({ navigation }: any) {
                 <AppInput label="Agent Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
               )} />
 
+              <View style={styles.divider} />
+              <Text style={styles.sectionTitle}>Edit Contacts</Text>
+              <View style={{ height: 12 }} />
+
+              <Collapsible title="Contact 1" startOpen>
+                <Controller control={control} name="ec1Name" render={({ field, fieldState }) => (
+                  <AppInput label="Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+                )} />
+                <Controller control={control} name="ec1Phone" render={({ field, fieldState }) => (
+                  <AppInput label="Phone" keyboardType="phone-pad" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+                )} />
+              </Collapsible>
+
+              <Collapsible title="Contact 2">
+                <Controller control={control} name="ec2Name" render={({ field, fieldState }) => (
+                  <AppInput label="Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+                )} />
+                <Controller control={control} name="ec2Phone" render={({ field, fieldState }) => (
+                  <AppInput label="Phone" keyboardType="phone-pad" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+                )} />
+              </Collapsible>
+
+              <Collapsible title="Contact 3">
+                <Controller control={control} name="ec3Name" render={({ field, fieldState }) => (
+                  <AppInput label="Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+                )} />
+                <Controller control={control} name="ec3Phone" render={({ field, fieldState }) => (
+                  <AppInput label="Phone" keyboardType="phone-pad" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+                )} />
+              </Collapsible>
+
               <View style={styles.editActions}>
                 <AppButton title="Cancel" onPress={handleCancel} variant="ghost" style={{ flex: 1, marginRight: 8 }} />
                 <AppButton title="Save Changes" onPress={handleSubmit(handleSave)} style={{ flex: 1, marginLeft: 8 }} />
               </View>
             </View>
           ) : (
-            /* READ ONLY MODE */
+            /* ---- READ ONLY MODE ---- */
             <View>
               <InfoRow label="Name" value={`${user?.firstName} ${user?.lastName}`} />
               <InfoRow label="Date of Birth" value={user?.dob || '-'} />
               <InfoRow label="Phone" value={user?.phone || '-'} />
               <InfoRow label="Agent" value={user?.agent || '-'} />
+
+              <View style={styles.divider} />
+              <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>Emergency Contacts</Text>
+              
+              {(user?.emergencyContacts || []).map((c: any, i: number) => (
+                <ContactCard key={i} contact={c} index={i} />
+              ))}
             </View>
           )}
-        </View>
-
-        {/* Emergency Contacts */}
-        <View style={[styles.card, { marginTop: 20 }]}>
-          <Text style={styles.sectionTitle}>Emergency Contacts</Text>
-          <Text style={styles.subText}>To update these, please contact support or re-register.</Text>
-          
-          {(user?.emergencyContacts || []).map((c: any, i: number) => (
-            <View key={i} style={styles.contactRow}>
-              <View style={styles.contactIcon}>
-                <Ionicons name="people" size={16} color={COLORS.background} />
-              </View>
-              <View>
-                <Text style={styles.contactName}>{c.name}</Text>
-                <Text style={styles.contactPhone}>{c.phone}</Text>
-              </View>
-            </View>
-          ))}
         </View>
 
         {/* Danger Zone */}
         {!isEditing && (
           <View style={{ marginTop: 24, width: '100%' }}>
-            <AppButton title="Log Out" onPress={() => { demoStore.clear(); navigation.reset({ index:0, routes:[{ name: 'Starting' }] }); }} variant="ghost" />
+            <AppButton title="Log Out" onPress={handleLogout} variant="ghost" />
             <AppButton title="Delete Account" onPress={handleDelete} variant="danger" style={{ marginTop: 12 }} />
           </View>
         )}
@@ -198,19 +272,33 @@ const styles = StyleSheet.create({
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   sectionTitle: { color: COLORS.accent, fontSize: 16, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  editLink: { color: COLORS.textSecondary, fontSize: 14, textDecorationLine: 'underline' },
-  subText: { color: COLORS.textSecondary, fontSize: 12, marginBottom: 16 },
+  editLink: { color: COLORS.accent, fontSize: 14, fontWeight: '700' },
   
   infoRow: { marginBottom: 16 },
   label: { color: COLORS.textSecondary, fontSize: 12, marginBottom: 4 },
   value: { color: COLORS.textPrimary, fontSize: 16, fontWeight: '500' },
 
-  editActions: { flexDirection: 'row', marginTop: 10 },
+  divider: { height: 1, backgroundColor: '#1F241D', marginVertical: 20 },
+  editActions: { flexDirection: 'row', marginTop: 24 },
 
-  contactRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  contactIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.accent, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  /* Contact Cards for Read Mode */
+  contactCard: {
+    backgroundColor: '#141812',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#2A3028',
+  },
+  contactHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  contactBadge: { 
+    width: 20, height: 20, borderRadius: 10, backgroundColor: COLORS.accent, 
+    alignItems: 'center', justifyContent: 'center', marginRight: 10 
+  },
+  contactBadgeText: { color: '#000', fontSize: 12, fontWeight: 'bold' },
   contactName: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '700' },
-  contactPhone: { color: COLORS.textSecondary, fontSize: 13 },
+  contactBody: { flexDirection: 'row', alignItems: 'center', paddingLeft: 30 },
+  contactPhone: { color: COLORS.textSecondary, fontSize: 14 },
 
   footer: { marginTop: 40, marginBottom: 40, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#1F241D', paddingTop: 24 },
   footerTitle: { color: COLORS.textPrimary, fontWeight: '700', marginBottom: 6 },
