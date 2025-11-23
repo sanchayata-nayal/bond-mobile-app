@@ -1,3 +1,4 @@
+// src/components/PasswordInput.tsx
 import React, { useState } from 'react';
 import { View, TextInput, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,7 +15,7 @@ type Props = {
 export default function PasswordInput({ label, value, onChangeText, placeholder, error }: Props) {
   const [show, setShow] = useState(false);
   return (
-    <View style={{ marginBottom: 12 }}>
+    <View style={{ marginBottom: 14 }}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <View style={[styles.wrapper, error ? { borderColor: COLORS.error } : null]}>
         <TextInput
@@ -24,6 +25,10 @@ export default function PasswordInput({ label, value, onChangeText, placeholder,
           placeholder={placeholder}
           placeholderTextColor="#7A7A7A"
           style={styles.input}
+          autoCapitalize="none"
+          autoCorrect={false}
+          textContentType="none" // Helps prevent some keyboard flickering
+          autoComplete="off"
         />
         <TouchableOpacity onPress={() => setShow(s => !s)} style={{ paddingHorizontal: 12 }}>
           <Ionicons name={show ? 'eye-off' : 'eye'} size={20} color={COLORS.textSecondary} />
@@ -36,7 +41,15 @@ export default function PasswordInput({ label, value, onChangeText, placeholder,
 
 const styles = StyleSheet.create({
   label: { color: COLORS.textSecondary, marginBottom: 8, fontSize: 13 },
-  wrapper: { height: LAYOUT.controlHeight, borderRadius: LAYOUT.borderRadius, flexDirection: 'row', alignItems: 'center', backgroundColor: '#0C0E0B', borderWidth: 1, borderColor: 'transparent' },
+  wrapper: { 
+    height: LAYOUT.controlHeight, 
+    borderRadius: LAYOUT.borderRadius, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#0C0E0B', 
+    borderWidth: 1, 
+    borderColor: 'transparent' 
+  },
   input: { flex: 1, paddingHorizontal: 12, color: COLORS.textPrimary, fontSize: 16, height: '100%' },
   err: { color: COLORS.error, marginTop: 6, fontSize: 12 },
 });

@@ -1,86 +1,102 @@
 // src/components/DatePickerField.tsx
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { COLORS, LAYOUT } from '../styles/theme';
 
 type Props = {
   label?: string;
-  value?: string; // expected format DD/MM/YYYY
+  value?: string; // Format: MM/DD/YYYY
   onChange?: (val: string) => void;
   error?: string | null;
   placeholder?: string;
-  style?: any;
-  // allow keyboardType prop if parent wants it
-  keyboardType?: any;
 };
-
-const DATE_RE = /^([0-3]?\d)\/([01]?\d)\/(\d{4})$/;
 
 export default function DatePickerField({
   label,
   value = '',
   onChange,
   error,
-  placeholder = 'DD/MM/YYYY',
-  style,
-  keyboardType = Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'number-pad',
+  placeholder = 'MM/DD/YYYY',
 }: Props) {
-  const [text, setText] = useState(value);
+  const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
 
-  useEffect(() => {
-    // keep internal text in sync if parent updates value programmatically
-    setText(value ?? '');
-  }, [value]);
+  // Helper to format Date object to MM/DD/YYYY
+  const formatDate = (date: Date) => {
+    const mm = (date.getMonth() + 1).toString().padStart(2, '0');
+    const dd = date.getDate().toString().padStart(2, '0');
+    const yyyy = date.getFullYear();
+    return `${mm}/${dd}/${yyyy}`;
+  };
 
-  // optional small formatter: add slashes as user types: 2 -> 2, 2+1 -> 02/...
-  const handleChange = (t: string) => {
-    // allow only digits and slash
-    let cleaned = t.replace(/[^\d\/]/g, '');
+  // NATIVE: Handle picker confirm
+  const handleConfirm = (date: Date) => {
+    setDatePickerVisibility(false);
+    if (onChange) onChange(formatDate(date));
+  };
 
-    // auto-insert slashes for convenience
-    if (cleaned.length === 2 && text.length === 1 && !cleaned.includes('/')) {
-      cleaned = cleaned + '/';
-    } else if (cleaned.length === 5 && text.length === 4 && !cleaned.includes('/', 3)) {
-      cleaned = cleaned + '/';
+  // WEB/TEXT: Auto-mask input as MM/DD/YYYY
+  const handleTextChange = (text: string) => {
+    // Remove non-numeric characters
+    let cleaned = text.replace(/[^0-9]/g, '');
+    
+    // Enforce max length (8 digits -> 10 chars)
+    if (cleaned.length > 8) cleaned = cleaned.slice(0, 8);
+
+    let formatted = cleaned;
+    if (cleaned.length > 2) {
+      formatted = `${cleaned.slice(0, 2)}/${cleaned.slice(2)}`;
+    }
+    if (cleaned.length > 4) {
+      formatted = `${formatted.slice(0, 5)}/${cleaned.slice(4)}`;
     }
 
-    // limit length to 10 (DD/MM/YYYY)
-    if (cleaned.length > 10) cleaned = cleaned.slice(0, 10);
-
-    setText(cleaned);
-    onChange?.(cleaned);
+    onChange?.(formatted);
   };
 
-  // optional helper to show a calendar icon or open native picker in future
-  const openNative = () => {
-    // placeholder hook: later we can open a native date picker here
+  const openPicker = () => {
+    Keyboard.dismiss();
+    setDatePickerVisibility(true);
   };
-
-  const isPlaceholderVisible = !text || text.length === 0;
 
   return (
-    <View style={[style, styles.wrapperOuter]}>
+    <View style={styles.wrapperOuter}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
 
-      <View style={[styles.inputRow]}>
+      <TouchableOpacity 
+        activeOpacity={1} 
+        onPress={Platform.OS !== 'web' ? openPicker : undefined} // Only open picker on native
+        style={[styles.inputRow, error ? { borderColor: COLORS.error } : null]}
+      >
         <TextInput
-          value={text}
-          onChangeText={handleChange}
+          style={styles.input}
+          value={value}
+          onChangeText={handleTextChange}
           placeholder={placeholder}
           placeholderTextColor="#7A7A7A"
-          style={styles.input}
-          keyboardType={keyboardType}
-          returnKeyType="done"
-          underlineColorAndroid="transparent"
+          keyboardType="number-pad"
+          maxLength={10}
+          editable={Platform.OS === 'web'} // Read-only on mobile (use picker)
+          pointerEvents={Platform.OS === 'web' ? 'auto' : 'none'} // Pass touches through to parent on mobile
         />
-
-        <TouchableOpacity onPress={openNative} activeOpacity={0.7} style={styles.iconWrap}>
+        
+        <TouchableOpacity onPress={openPicker} style={styles.iconWrap}>
           <Ionicons name="calendar-outline" size={20} color={COLORS.textSecondary} />
         </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
 
       {error ? <Text style={styles.err}>{error}</Text> : null}
+
+      <DateTimePickerModal
+        isVisible={isDatePickerVisible}
+        mode="date"
+        onConfirm={handleConfirm}
+        onCancel={() => setDatePickerVisibility(false)}
+        // Default to 18 years ago for convenience
+        date={value && value.length === 10 ? new Date(value) : new Date(new Date().setFullYear(new Date().getFullYear() - 18))}
+        maximumDate={new Date()}
+      />
     </View>
   );
 }

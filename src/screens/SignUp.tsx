@@ -25,30 +25,64 @@ import { demoStore } from '../services/demoStore';
 import { COLORS, LAYOUT } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 
-/* ---------- Validation Schema ---------- */
-const parseDateFromString = (str: string) => {
+/* ---------- Validation Logic ---------- */
+const parseDate = (str: string) => {
   const parts = str.split('/');
   if (parts.length !== 3) return null;
-  const d = parseInt(parts[0], 10);
-  const m = parseInt(parts[1], 10) - 1;
+  const m = parseInt(parts[0], 10);
+  const d = parseInt(parts[1], 10);
   const y = parseInt(parts[2], 10);
-  const dt = new Date(y, m, d);
-  return isNaN(dt.getTime()) ? null : dt;
+  
+  // Basic sanity checks
+  if (m < 1 || m > 12) return null;
+  if (d < 1 || d > 31) return null;
+  if (y < 1900 || y > new Date().getFullYear()) return null;
+
+  const date = new Date(y, m - 1, d);
+  // check if date is valid (e.g. not 31st of Feb)
+  if (date.getFullYear() !== y || date.getMonth() + 1 !== m || date.getDate() !== d) {
+    return null;
+  }
+  return date;
 };
 
 const schema = yup.object({
   firstName: yup.string().required('First name is required'),
-  lastName: yup.string().required('Last name is required'),
-  dob: yup.string().required('Date of birth required'),
-  phone: yup.string().required('Phone required').matches(/^\d{10}$/, '10 digits required'),
-  password: yup.string().required('Required').min(6, 'Min 6 chars'),
-  agent: yup.string().required('Agent required'),
-  ec1Name: yup.string().required('Name required'),
-  ec1Phone: yup.string().required('Phone required').matches(/^\d{10}$/, '10 digits'),
-  ec2Name: yup.string(),
-  ec2Phone: yup.string(),
-  ec3Name: yup.string(),
-  ec3Phone: yup.string(),
+  lastName: yup.string(), // Optional now
+  dob: yup
+    .string()
+    .required('Date of birth required')
+    .matches(/^\d{2}\/\d{2}\/\d{4}$/, 'Format: MM/DD/YYYY')
+    .test('is-valid-date', 'Invalid date or month', (val) => !!(val && parseDate(val)))
+    .test('is-18', 'Must be at least 18 years old', (val) => {
+      if (!val) return false;
+      const date = parseDate(val);
+      if (!date) return false;
+      const today = new Date();
+      const age = today.getFullYear() - date.getFullYear();
+      const m = today.getMonth() - date.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < date.getDate())) {
+        return (age - 1) >= 18;
+      }
+      return age >= 18;
+    }),
+  phone: yup.string().required('Phone required').matches(/^\d{10}$/, 'Must be exactly 10 digits'),
+  password: yup
+    .string()
+    .required('Password required')
+    .min(6, 'Min 6 characters')
+    .matches(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/, 'Must contain letters and numbers'),
+  agent: yup.string().required('Agent name required'),
+  
+  // 3 Mandatory Emergency Contacts
+  ec1Name: yup.string().required('Contact 1 name required'),
+  ec1Phone: yup.string().required('Contact 1 phone required').matches(/^\d{10}$/, 'Must be 10 digits'),
+  
+  ec2Name: yup.string().required('Contact 2 name required'),
+  ec2Phone: yup.string().required('Contact 2 phone required').matches(/^\d{10}$/, 'Must be 10 digits'),
+  
+  ec3Name: yup.string().required('Contact 3 name required'),
+  ec3Phone: yup.string().required('Contact 3 phone required').matches(/^\d{10}$/, 'Must be 10 digits'),
 }).required();
 
 export default function SignUp({ navigation }: any) {
@@ -56,7 +90,6 @@ export default function SignUp({ navigation }: any) {
   const headingAnim = useRef(new Animated.Value(0)).current;
   const [showDisclaimer, setShowDisclaimer] = useState(false);
 
-  // Calculate dynamic max width for the form card
   const isTabletOrWeb = width > 600;
   const formWidth = isTabletOrWeb ? 500 : '100%';
 
@@ -74,20 +107,21 @@ export default function SignUp({ navigation }: any) {
       ec1Name: '', ec1Phone: '', ec2Name: '', ec2Phone: '', ec3Name: '', ec3Phone: '',
     },
     resolver: yupResolver(schema),
+    mode: 'onChange', // Triggers validation while typing
   });
 
   const onSubmit = (data: any) => {
-    // Save to store (Simulated backend)
     demoStore.setUser({
       id: Math.random().toString(36).slice(2, 9),
       firstName: data.firstName,
-      lastName: data.lastName,
+      lastName: data.lastName || '',
       dob: data.dob,
       phone: `+1${data.phone}`,
       agent: data.agent,
       emergencyContacts: [
         { name: data.ec1Name, phone: `+1${data.ec1Phone}` },
-        ...(data.ec2Name ? [{ name: data.ec2Name, phone: `+1${data.ec2Phone}` }] : []),
+        { name: data.ec2Name, phone: `+1${data.ec2Phone}` },
+        { name: data.ec3Name, phone: `+1${data.ec3Phone}` },
       ],
     });
     setShowDisclaimer(false);
@@ -102,11 +136,39 @@ export default function SignUp({ navigation }: any) {
     </View>
   );
 
+  // Reusable Phone Row Component
+  const PhoneField = ({ controlName, label, control, error }: any) => (
+    <View style={{ marginBottom: 14 }}>
+      {label && <Text style={styles.label}>{label}</Text>}
+      <View style={styles.phoneRow}>
+        <CountryPill />
+        <View style={{ flex: 1 }}>
+          <Controller
+            control={control}
+            name={controlName}
+            render={({ field }) => (
+              <AppInput
+                value={field.value}
+                onChangeText={field.onChange}
+                keyboardType="phone-pad"
+                placeholder="5551234567"
+                style={{ marginBottom: 0 }}
+                // We pass error to AppInput to color the border red
+                error={null} 
+              />
+            )}
+          />
+        </View>
+      </View>
+      {/* Render error outside because AppInput inside row is tight */}
+      {error && <Text style={styles.errText}>{error}</Text>}
+    </View>
+  );
+
   return (
     <ScreenContainer scrollable>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%', alignItems: 'center' }}>
         
-        {/* Header Animation */}
         <Animated.View style={[styles.header, { opacity: headingAnim, transform: [{ translateY: headingAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
@@ -117,7 +179,6 @@ export default function SignUp({ navigation }: any) {
           </View>
         </Animated.View>
 
-        {/* Form Card */}
         <View style={[styles.card, { width: formWidth }]}>
           
           {/* Personal Details */}
@@ -131,33 +192,26 @@ export default function SignUp({ navigation }: any) {
             </View>
             <View style={{ flex: 1 }}>
               <Controller control={control} name="lastName" render={({ field, fieldState }) => (
-                <AppInput label="Last Name" placeholder="Doe" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+                <AppInput label="Last Name (Optional)" placeholder="Doe" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
               )} />
             </View>
           </View>
 
           <Controller control={control} name="dob" render={({ field, fieldState }) => (
-            <DatePickerField label="Date of Birth" value={field.value} onChange={(v) => setValue('dob', v, { shouldValidate: true })} error={fieldState.error?.message} />
+            <DatePickerField 
+              label="Date of Birth" 
+              value={field.value} 
+              onChange={(v) => setValue('dob', v, { shouldValidate: true })} 
+              error={fieldState.error?.message} 
+            />
           )} />
 
-          <Controller control={control} name="phone" render={({ field, fieldState }) => (
-            <View style={{ marginBottom: 14 }}>
-              <Text style={styles.label}>Phone Number</Text>
-              <View style={styles.phoneRow}>
-                <CountryPill />
-                <View style={{ flex: 1 }}>
-                  <AppInput 
-                    value={field.value} 
-                    onChangeText={field.onChange} 
-                    keyboardType="phone-pad" 
-                    placeholder="555 123 4567"
-                    error={fieldState.error?.message}
-                    style={{ marginBottom: 0 }} // remove default margin inside row
-                  />
-                </View>
-              </View>
-            </View>
-          )} />
+          <PhoneField 
+            controlName="phone" 
+            label="Phone Number" 
+            control={control} 
+            error={formState.errors.phone?.message} 
+          />
 
           <Controller control={control} name="agent" render={({ field, fieldState }) => (
             <AppInput label="Agent Name" icon="business-outline" placeholder="Assigned Agent" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
@@ -165,34 +219,36 @@ export default function SignUp({ navigation }: any) {
 
           <View style={styles.divider} />
 
-          {/* Security */}
           <Text style={styles.sectionTitle}>Security</Text>
           <Controller control={control} name="password" render={({ field, fieldState }) => (
-            <PasswordInput label="Password" placeholder="Create a password" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+            <PasswordInput label="Password" placeholder="Min 6 chars, alphanumeric" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
           )} />
 
           <View style={styles.divider} />
 
-          {/* Emergency Contacts */}
+          {/* Emergency Contacts - All 3 Required */}
           <Text style={styles.sectionTitle}>Emergency Contacts</Text>
-          <Text style={styles.sectionSub}>At least one contact is required.</Text>
+          <Text style={styles.sectionSub}>3 contacts are required for maximum safety.</Text>
 
           <Collapsible title="Contact 1 (Required)" startOpen>
             <Controller control={control} name="ec1Name" render={({ field, fieldState }) => (
-              <AppInput label="Full Name" placeholder="Contact Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+              <AppInput label="Full Name" placeholder="Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
             )} />
-            <Controller control={control} name="ec1Phone" render={({ field, fieldState }) => (
-              <AppInput label="Phone Number" placeholder="Contact Phone" keyboardType="phone-pad" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
-            )} />
+            <PhoneField controlName="ec1Phone" label="Phone" control={control} error={formState.errors.ec1Phone?.message} />
           </Collapsible>
 
-          <Collapsible title="Contact 2 (Optional)">
-            <Controller control={control} name="ec2Name" render={({ field }) => (
-              <AppInput label="Full Name" placeholder="Contact Name" value={field.value} onChangeText={field.onChange} />
+          <Collapsible title="Contact 2 (Required)">
+            <Controller control={control} name="ec2Name" render={({ field, fieldState }) => (
+              <AppInput label="Full Name" placeholder="Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
             )} />
-            <Controller control={control} name="ec2Phone" render={({ field }) => (
-              <AppInput label="Phone Number" placeholder="Contact Phone" keyboardType="phone-pad" value={field.value} onChangeText={field.onChange} />
+            <PhoneField controlName="ec2Phone" label="Phone" control={control} error={formState.errors.ec2Phone?.message} />
+          </Collapsible>
+
+          <Collapsible title="Contact 3 (Required)">
+            <Controller control={control} name="ec3Name" render={({ field, fieldState }) => (
+              <AppInput label="Full Name" placeholder="Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
             )} />
+            <PhoneField controlName="ec3Phone" label="Phone" control={control} error={formState.errors.ec3Phone?.message} />
           </Collapsible>
 
           <View style={{ height: 20 }} />
@@ -241,7 +297,7 @@ const styles = StyleSheet.create({
   subtitle: { color: COLORS.textSecondary, fontSize: 14 },
   
   card: {
-    backgroundColor: '#0C0E0B', // slightly lighter than background
+    backgroundColor: '#0C0E0B', 
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
@@ -261,6 +317,7 @@ const styles = StyleSheet.create({
     height: LAYOUT.controlHeight, borderWidth: 1, borderColor: '#2A3028'
   },
   countryText: { color: COLORS.textPrimary, fontWeight: '700' },
+  errText: { color: COLORS.error, marginTop: 6, fontSize: 12 },
 
   /* Modal */
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
