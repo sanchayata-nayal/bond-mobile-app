@@ -1,8 +1,8 @@
 // src/components/ConfirmationModal.tsx
 import React from 'react';
-import { View, Text, Modal, StyleSheet, Dimensions, Platform } from 'react-native';
+import { View, Text, Modal, StyleSheet, Platform } from 'react-native';
 import AppButton from './AppButton';
-import { COLORS, LAYOUT } from '../styles/theme';
+import { COLORS } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 type Props = {

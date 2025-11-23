@@ -99,14 +99,15 @@ export default function Login({ navigation }: any) {
     if (isValid) {
       setForgotVisible(false);
       resetForgot();
-      showAlert('Identity Verified', 'A password reset link has been sent to your email.', 'success');
+      setTimeout(() => {
+        showAlert('Identity Verified', 'A password reset link has been sent to your email.', 'success');
+      }, 500);
     } else {
-      // Show error inside the modal context or main alert
-      // Here we close and show alert for simplicity, or you could add inline error state
+      // Close modal and show error
       setForgotVisible(false);
       setTimeout(() => {
         showAlert('Verification Failed', 'The details provided do not match our records.', 'error');
-      }, 300);
+      }, 500);
     }
   };
 
