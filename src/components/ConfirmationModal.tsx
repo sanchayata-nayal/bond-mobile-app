@@ -2,7 +2,7 @@
 import React from 'react';
 import { View, Text, Modal, StyleSheet, Platform } from 'react-native';
 import AppButton from './AppButton';
-import { COLORS } from '../styles/theme';
+import { COLORS, LAYOUT } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 type Props = {
@@ -14,7 +14,7 @@ type Props = {
   confirmText?: string;
   cancelText?: string;
   variant?: 'danger' | 'primary';
-  icon?: any; // Ionicons name
+  icon?: any;
 };
 
 export default function ConfirmationModal({
@@ -24,10 +24,13 @@ export default function ConfirmationModal({
   onConfirm,
   onCancel,
   confirmText = 'Confirm',
-  cancelText = 'Cancel',
+  cancelText = '', // Default to empty to trigger single-button mode
   variant = 'primary',
   icon,
 }: Props) {
+  // Determine if we are in single-button mode
+  const isSingleButton = !cancelText;
+
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
@@ -45,17 +48,20 @@ export default function ConfirmationModal({
           {message && <Text style={styles.message}>{message}</Text>}
 
           <View style={styles.row}>
-            <AppButton 
-              title={cancelText} 
-              onPress={onCancel} 
-              variant="ghost" 
-              style={{ flex: 1, marginRight: 8 }} 
-            />
+            {!isSingleButton && (
+              <AppButton 
+                title={cancelText} 
+                onPress={onCancel} 
+                variant="ghost" 
+                style={{ flex: 1, marginRight: 8 }} 
+              />
+            )}
+            
             <AppButton 
               title={confirmText} 
               onPress={onConfirm} 
               variant={variant === 'danger' ? 'danger' : 'primary'} 
-              style={{ flex: 1, marginLeft: 8 }} 
+              style={isSingleButton ? { width: '100%' } : { flex: 1, marginLeft: 8 }} 
             />
           </View>
         </View>
@@ -75,7 +81,7 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 400,
-    backgroundColor: '#141812', // Slightly lighter than pure background for depth
+    backgroundColor: '#141812',
     borderRadius: 24,
     padding: 24,
     alignItems: 'center',
@@ -103,5 +109,6 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     width: '100%',
+    justifyContent: 'center',
   }
 });
