@@ -1,51 +1,87 @@
 // src/screens/UserLanding.tsx
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Platform, Linking } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Platform, Linking, Alert } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import DashboardHeader from '../components/DashboardHeader';
 import PanicButton from '../components/PanicButton';
 import AppButton from '../components/AppButton';
-import ConfirmationModal from '../components/ConfirmationModal'; // New
+import ConfirmationModal from '../components/ConfirmationModal';
 import { demoStore } from '../services/demoStore';
 import { COLORS } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
+
+// The primary number for both SMS and Calls
+const AGENT_NUMBER = '+15615632245';
 
 export default function UserLanding({ navigation }: any) {
   const user = demoStore.getUser();
   const [menuOpen, setMenuOpen] = useState(false);
   const [panicState, setPanicState] = useState<'idle' | 'active'>('idle');
-  const [logoutVisible, setLogoutVisible] = useState(false); // New state for modal
+  const [logoutVisible, setLogoutVisible] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
 
-  const handlePanic = async () => {
-    const mapLink = 'https://maps.google.com/?q=37.78825,-122.4324'; 
-    const contacts = user?.emergencyContacts || [];
-    const contactList = contacts.map((c: any) => `${c.name}: ${c.phone}`).join('\n');
-    
-    const body = [
-      `🚨 EMERGENCY ALERT 🚨`,
-      `${user?.firstName} ${user?.lastName} has triggered the panic button.`,
-      `Location: ${mapLink}`,
-      `Agent: ${user?.agent || 'Unknown'}`,
-      `Contacts:\n${contactList}`
-    ].join('\n\n');
-
-    const smsUrl = Platform.select({
-      ios: `sms:&body=${encodeURIComponent(body)}`,
-      android: `sms:?body=${encodeURIComponent(body)}`,
-    }) || '';
-
-    Linking.openURL(smsUrl).catch(() => {});
-    setPanicState('active');
-
-    setTimeout(() => {
-      Linking.openURL('tel:+15550000000').catch(() => {});
-    }, 2500);
+  const handleLogout = () => {
+    setMenuOpen(false);
+    setLogoutVisible(true);
   };
 
   const confirmLogout = () => {
     setLogoutVisible(false);
     demoStore.clear();
     navigation.reset({ index: 0, routes: [{ name: 'Starting' }] });
+  };
+
+  const handlePanic = async () => {
+    setIsLocating(true);
+
+    try {
+      // 1. Request Permissions
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'We need your location to send help.');
+        setIsLocating(false);
+        return;
+      }
+
+      // 2. Get Exact Location
+      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const { latitude, longitude } = location.coords;
+      
+      // Google Maps Link
+      const mapLink = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+
+      // 3. Construct Message
+      const contacts = user?.emergencyContacts || [];
+      const contactList = contacts.map((c: any) => `${c.name}: ${c.phone}`).join('\n');
+      
+      const body = [
+        `🚨 EMERGENCY ALERT 🚨`,
+        `${user?.firstName} ${user?.lastName} has triggered the panic button.`,
+        `Location: ${mapLink}`,
+        `Accuracy: ${location.coords.accuracy?.toFixed(0)} meters`,
+        `Agent: ${user?.agent || 'Unknown'}`,
+        `Contacts:\n${contactList}`
+      ].join('\n\n');
+
+      // 4. Open SMS (Targeting Agent Number)
+      const separator = Platform.OS === 'ios' ? '&' : '?';
+      const smsUrl = `sms:${AGENT_NUMBER}${separator}body=${encodeURIComponent(body)}`;
+
+      await Linking.openURL(smsUrl);
+      
+      setPanicState('active');
+      setIsLocating(false);
+
+      // 5. Auto-dial Agent (Delay allows SMS app to open first)
+      setTimeout(() => {
+        Linking.openURL(`tel:${AGENT_NUMBER}`).catch(() => {});
+      }, 2500);
+
+    } catch (error) {
+      Alert.alert('Error', 'Could not fetch location or open messaging.');
+      setIsLocating(false);
+    }
   };
 
   return (
@@ -61,11 +97,15 @@ export default function UserLanding({ navigation }: any) {
           <>
             <View style={styles.welcomeBlock}>
               <Text style={styles.greeting}>Hello, {user?.firstName || 'User'}</Text>
-              <Text style={styles.status}>You are protected. Tap below for emergency.</Text>
+              <Text style={styles.status}>
+                {isLocating ? 'Acquiring GPS signal...' : 'You are protected. Tap below for emergency.'}
+              </Text>
             </View>
-            <View style={styles.panicWrapper}>
-              <PanicButton onPress={handlePanic} />
+
+            <View style={[styles.panicWrapper, isLocating && { opacity: 0.7 }]}>
+              <PanicButton onPress={handlePanic} disabled={isLocating} />
             </View>
+
             <View style={styles.footer}>
               <TouchableOpacity style={styles.profileLink} onPress={() => navigation.navigate('UserDetails')}>
                 <Ionicons name="person-outline" size={16} color={COLORS.textSecondary} />
@@ -74,13 +114,26 @@ export default function UserLanding({ navigation }: any) {
             </View>
           </>
         ) : (
+          /* Active Emergency State */
           <View style={styles.activeState}>
             <Ionicons name="alert-circle" size={64} color={COLORS.panic} style={{ marginBottom: 16 }} />
             <Text style={styles.activeTitle}>Emergency Mode Active</Text>
-            <Text style={styles.activeDesc}>SMS composer opened. Dialing agent shortly...</Text>
+            <Text style={styles.activeDesc}>
+              Location sent to Agent. SMS composer opened. Dialing {AGENT_NUMBER} shortly...
+            </Text>
+
             <View style={{ width: '100%', marginTop: 32 }}>
-              <AppButton title="Call Agent Now" onPress={() => Linking.openURL('tel:+15615632245')} variant="primary" style={{ backgroundColor: COLORS.panic, marginBottom: 16 }} />
-              <AppButton title="I'm Safe / Cancel" onPress={() => setPanicState('idle')} variant="ghost" />
+              <AppButton 
+                title="Call Agent Again" 
+                onPress={() => Linking.openURL(`tel:${AGENT_NUMBER}`)} 
+                variant="primary" 
+                style={{ backgroundColor: COLORS.panic, marginBottom: 16 }}
+              />
+              <AppButton 
+                title="I'm Safe / Cancel" 
+                onPress={() => setPanicState('idle')} 
+                variant="ghost" 
+              />
             </View>
           </View>
         )}
@@ -95,7 +148,7 @@ export default function UserLanding({ navigation }: any) {
               <Text style={styles.menuText}>My Profile</Text>
             </TouchableOpacity>
             <View style={styles.divider} />
-            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); setLogoutVisible(true); }}>
+            <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
               <Ionicons name="log-out" size={20} color={COLORS.panic} style={{ marginRight: 12 }} />
               <Text style={[styles.menuText, { color: COLORS.panic }]}>Log Out</Text>
             </TouchableOpacity>
