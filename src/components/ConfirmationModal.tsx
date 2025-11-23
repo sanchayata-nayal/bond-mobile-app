@@ -2,7 +2,7 @@
 import React from 'react';
 import { View, Text, Modal, StyleSheet, Platform } from 'react-native';
 import AppButton from './AppButton';
-import { COLORS, LAYOUT } from '../styles/theme';
+import { COLORS } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 type Props = {
@@ -12,7 +12,7 @@ type Props = {
   onConfirm: () => void;
   onCancel: () => void;
   confirmText?: string;
-  cancelText?: string;
+  cancelText?: string; // Pass "" (empty string) to hide this button
   variant?: 'danger' | 'primary';
   icon?: any;
 };
@@ -24,12 +24,12 @@ export default function ConfirmationModal({
   onConfirm,
   onCancel,
   confirmText = 'Confirm',
-  cancelText = '', // Default to empty to trigger single-button mode
+  cancelText = 'Cancel', // Default has text, so 2 buttons show by default
   variant = 'primary',
   icon,
 }: Props) {
-  // Determine if we are in single-button mode
-  const isSingleButton = !cancelText;
+  // If cancelText is explicitly empty string, we switch to single-button mode
+  const isSingleButton = cancelText === '';
 
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -61,6 +61,7 @@ export default function ConfirmationModal({
               title={confirmText} 
               onPress={onConfirm} 
               variant={variant === 'danger' ? 'danger' : 'primary'} 
+              // If single button, take full width. If two, take flex 1.
               style={isSingleButton ? { width: '100%' } : { flex: 1, marginLeft: 8 }} 
             />
           </View>
