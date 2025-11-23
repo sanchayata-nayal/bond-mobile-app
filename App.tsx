@@ -7,25 +7,29 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { COLORS } from './src/styles/theme';
 
-// Define the deep dark theme for the navigator
+// Create a strict Dark Theme for the navigator
 const AppTheme = {
   ...DefaultTheme,
+  dark: true,
   colors: {
     ...DefaultTheme.colors,
-    background: COLORS.background, // #0F150D
+    primary: COLORS.accent,
+    background: COLORS.background, // Forces dark background everywhere
     card: COLORS.background,
     text: COLORS.textPrimary,
     border: 'transparent',
+    notification: COLORS.accent,
   },
 };
 
 export default function App() {
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider style={{ backgroundColor: COLORS.background }}>
       <NavigationContainer theme={AppTheme}>
         <AppNavigation />
       </NavigationContainer>
 
+      {/* Force light text on status bar (for dark background) */}
       <StatusBar style="light" backgroundColor={COLORS.background} />
     </SafeAreaProvider>
   );

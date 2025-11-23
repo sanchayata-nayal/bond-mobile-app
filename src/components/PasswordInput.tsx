@@ -13,7 +13,7 @@ type Props = {
 };
 
 export default function PasswordInput({ label, value, onChangeText, placeholder, error }: Props) {
-  // Defaulting to true so password is VISIBLE initially as requested
+  // Default to TRUE (Visible)
   const [show, setShow] = useState(true);
 
   return (
@@ -21,6 +21,7 @@ export default function PasswordInput({ label, value, onChangeText, placeholder,
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <View style={[styles.wrapper, error ? { borderColor: COLORS.error } : null]}>
         <TextInput
+          // If show is true, secureTextEntry is false (visible)
           secureTextEntry={!show}
           value={value}
           onChangeText={onChangeText}
@@ -28,14 +29,15 @@ export default function PasswordInput({ label, value, onChangeText, placeholder,
           placeholderTextColor="#7A7A7A"
           style={styles.input}
           
-          // Stability props
+          // Stability props for smooth typing
           autoCapitalize="none"
           autoCorrect={false}
           spellCheck={false}
-          textContentType="password" 
-          importantForAutofill="yes"
+          textContentType="none" // Prevents OS keychain flickering
+          importantForAutofill="no"
+          autoComplete="off"
           
-          // Fix for jumping font on Android
+          // Android font padding fix
           {...(Platform.OS === 'android' ? { includeFontPadding: false } : {})}
         />
         <TouchableOpacity 
@@ -43,7 +45,14 @@ export default function PasswordInput({ label, value, onChangeText, placeholder,
           style={styles.eyeBtn}
           activeOpacity={0.7}
         >
-          <Ionicons name={show ? 'eye-off' : 'eye'} size={20} color={COLORS.textSecondary} />
+          {/* show = true (Visible) -> Icon 'eye' (Open eye)
+             show = false (Hidden) -> Icon 'eye-off' (Slashed eye)
+          */}
+          <Ionicons 
+            name={show ? 'eye' : 'eye-off'} 
+            size={20} 
+            color={COLORS.textSecondary} 
+          />
         </TouchableOpacity>
       </View>
       {error ? <Text style={styles.err}>{error}</Text> : null}
@@ -69,6 +78,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary, 
     fontSize: 16, 
     height: '100%',
+    // Using tabular-nums keeps character width consistent when masking
     fontVariant: ['tabular-nums'],
   },
   eyeBtn: {
