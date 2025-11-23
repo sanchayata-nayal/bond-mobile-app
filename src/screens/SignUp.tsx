@@ -9,9 +9,8 @@ import {
   Animated,
   TouchableOpacity,
   Alert,
-  ScrollView,
-  Dimensions,
   Modal,
+  useWindowDimensions,
 } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import AppInput from '../components/AppInput';
@@ -26,18 +25,13 @@ import { demoStore } from '../services/demoStore';
 import { COLORS, LAYOUT } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const SCREEN_HEIGHT = Dimensions.get('window').height;
-const HORIZONTAL_PADDING = LAYOUT.pagePadding || 20;
-const CARD_MAX_WIDTH = Math.min(680, SCREEN_WIDTH - HORIZONTAL_PADDING * 2); // for tablets keep it sane
-
-/* ---------- date parse and validation ---------- */
+/* ---------- Validation Schema ---------- */
 const parseDateFromString = (str: string) => {
   const parts = str.split('/');
   if (parts.length !== 3) return null;
-  const d = parseInt(parts[0], 10),
-    m = parseInt(parts[1], 10) - 1,
-    y = parseInt(parts[2], 10);
+  const d = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10) - 1;
+  const y = parseInt(parts[2], 10);
   const dt = new Date(y, m, d);
   return isNaN(dt.getTime()) ? null : dt;
 };
@@ -45,64 +39,45 @@ const parseDateFromString = (str: string) => {
 const schema = yup.object({
   firstName: yup.string().required('First name is required'),
   lastName: yup.string().required('Last name is required'),
-  dob: yup
-    .string()
-    .required('Date of birth required')
-    .test('age', 'You must be 18 or older', (val) => {
-      if (!val) return false;
-      const dt = parseDateFromString(val);
-      if (!dt) return false;
-      const age = (Date.now() - dt.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
-      return age >= 18;
-    }),
-  phone: yup.string().required('Phone required').matches(/^\d{10}$/, 'Enter 10 digit US phone'),
-  password: yup
-    .string()
-    .required('Password required')
-    .min(6, 'Min 6 chars')
-    .max(15, 'Max 15 chars')
-    .matches(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,15}$/, 'Letters and at least one number'),
+  dob: yup.string().required('Date of birth required'),
+  phone: yup.string().required('Phone required').matches(/^\d{10}$/, '10 digits required'),
+  password: yup.string().required('Required').min(6, 'Min 6 chars'),
   agent: yup.string().required('Agent required'),
-  ec1Name: yup.string().required('EC1 name required'),
-  ec1Phone: yup.string().required('EC1 phone required').matches(/^\d{10}$/, 'Enter 10 digit US phone'),
-  ec2Name: yup.string().required('EC2 name required'),
-  ec2Phone: yup.string().required('EC2 phone required').matches(/^\d{10}$/, 'Enter 10 digit US phone'),
-  ec3Name: yup.string().required('EC3 name required'),
-  ec3Phone: yup.string().required('EC3 phone required').matches(/^\d{10}$/, 'Enter 10 digit US phone'),
+  ec1Name: yup.string().required('Name required'),
+  ec1Phone: yup.string().required('Phone required').matches(/^\d{10}$/, '10 digits'),
+  ec2Name: yup.string(),
+  ec2Phone: yup.string(),
+  ec3Name: yup.string(),
+  ec3Phone: yup.string(),
 }).required();
 
 export default function SignUp({ navigation }: any) {
+  const { width } = useWindowDimensions();
   const headingAnim = useRef(new Animated.Value(0)).current;
-  const [showDisclaimerModal, setShowDisclaimerModal] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
+
+  // Calculate dynamic max width for the form card
+  const isTabletOrWeb = width > 600;
+  const formWidth = isTabletOrWeb ? 500 : '100%';
 
   useEffect(() => {
     Animated.timing(headingAnim, {
       toValue: 1,
-      duration: 420,
+      duration: 500,
       useNativeDriver: true,
     }).start();
   }, []);
 
   const { control, handleSubmit, formState, setValue } = useForm({
     defaultValues: {
-      firstName: '',
-      lastName: '',
-      dob: '',
-      phone: '',
-      password: '',
-      agent: '',
-      ec1Name: '',
-      ec1Phone: '',
-      ec2Name: '',
-      ec2Phone: '',
-      ec3Name: '',
-      ec3Phone: '',
+      firstName: '', lastName: '', dob: '', phone: '', password: '', agent: '',
+      ec1Name: '', ec1Phone: '', ec2Name: '', ec2Phone: '', ec3Name: '', ec3Phone: '',
     },
-    mode: 'onChange',
     resolver: yupResolver(schema),
   });
 
   const onSubmit = (data: any) => {
+    // Save to store (Simulated backend)
     demoStore.setUser({
       id: Math.random().toString(36).slice(2, 9),
       firstName: data.firstName,
@@ -112,274 +87,185 @@ export default function SignUp({ navigation }: any) {
       agent: data.agent,
       emergencyContacts: [
         { name: data.ec1Name, phone: `+1${data.ec1Phone}` },
-        { name: data.ec2Name, phone: `+1${data.ec2Phone}` },
-        { name: data.ec3Name, phone: `+1${data.ec3Phone}` },
+        ...(data.ec2Name ? [{ name: data.ec2Name, phone: `+1${data.ec2Phone}` }] : []),
       ],
     });
-
-    setShowDisclaimerModal(false);
-    Alert.alert('Account created', 'Welcome aboard — your profile is ready.', [
-      { text: 'Continue', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] }) },
+    setShowDisclaimer(false);
+    Alert.alert('Success', 'Account created successfully.', [
+      { text: 'Go to Dashboard', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] }) }
     ]);
   };
 
-  /* lightweight country indicator for phone fields (keeps UI minimal) */
   const CountryPill = () => (
     <View style={styles.countryPill}>
-      <Text style={styles.countryText}>+1</Text>
-      <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} style={{ marginLeft: 6 }} />
+      <Text style={styles.countryText}>🇺🇸 +1</Text>
     </View>
   );
 
   return (
-    <ScreenContainer scrollable={false}>
-      {/* DISCLAIMER MODAL — compact & elegant */}
-      <Modal visible={showDisclaimerModal} transparent animationType="fade">
+    <ScreenContainer scrollable>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%', alignItems: 'center' }}>
+        
+        {/* Header Animation */}
+        <Animated.View style={[styles.header, { opacity: headingAnim, transform: [{ translateY: headingAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.subtitle}>Please fill in all required fields.</Text>
+          </View>
+        </Animated.View>
+
+        {/* Form Card */}
+        <View style={[styles.card, { width: formWidth }]}>
+          
+          {/* Personal Details */}
+          <Text style={styles.sectionTitle}>Personal Details</Text>
+          
+          <View style={styles.row}>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Controller control={control} name="firstName" render={({ field, fieldState }) => (
+                <AppInput label="First Name" placeholder="Jane" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+              )} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Controller control={control} name="lastName" render={({ field, fieldState }) => (
+                <AppInput label="Last Name" placeholder="Doe" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+              )} />
+            </View>
+          </View>
+
+          <Controller control={control} name="dob" render={({ field, fieldState }) => (
+            <DatePickerField label="Date of Birth" value={field.value} onChange={(v) => setValue('dob', v, { shouldValidate: true })} error={fieldState.error?.message} />
+          )} />
+
+          <Controller control={control} name="phone" render={({ field, fieldState }) => (
+            <View style={{ marginBottom: 14 }}>
+              <Text style={styles.label}>Phone Number</Text>
+              <View style={styles.phoneRow}>
+                <CountryPill />
+                <View style={{ flex: 1 }}>
+                  <AppInput 
+                    value={field.value} 
+                    onChangeText={field.onChange} 
+                    keyboardType="phone-pad" 
+                    placeholder="555 123 4567"
+                    error={fieldState.error?.message}
+                    style={{ marginBottom: 0 }} // remove default margin inside row
+                  />
+                </View>
+              </View>
+            </View>
+          )} />
+
+          <Controller control={control} name="agent" render={({ field, fieldState }) => (
+            <AppInput label="Agent Name" icon="business-outline" placeholder="Assigned Agent" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+          )} />
+
+          <View style={styles.divider} />
+
+          {/* Security */}
+          <Text style={styles.sectionTitle}>Security</Text>
+          <Controller control={control} name="password" render={({ field, fieldState }) => (
+            <PasswordInput label="Password" placeholder="Create a password" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+          )} />
+
+          <View style={styles.divider} />
+
+          {/* Emergency Contacts */}
+          <Text style={styles.sectionTitle}>Emergency Contacts</Text>
+          <Text style={styles.sectionSub}>At least one contact is required.</Text>
+
+          <Collapsible title="Contact 1 (Required)" startOpen>
+            <Controller control={control} name="ec1Name" render={({ field, fieldState }) => (
+              <AppInput label="Full Name" placeholder="Contact Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+            )} />
+            <Controller control={control} name="ec1Phone" render={({ field, fieldState }) => (
+              <AppInput label="Phone Number" placeholder="Contact Phone" keyboardType="phone-pad" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+            )} />
+          </Collapsible>
+
+          <Collapsible title="Contact 2 (Optional)">
+            <Controller control={control} name="ec2Name" render={({ field }) => (
+              <AppInput label="Full Name" placeholder="Contact Name" value={field.value} onChangeText={field.onChange} />
+            )} />
+            <Controller control={control} name="ec2Phone" render={({ field }) => (
+              <AppInput label="Phone Number" placeholder="Contact Phone" keyboardType="phone-pad" value={field.value} onChangeText={field.onChange} />
+            )} />
+          </Collapsible>
+
+          <View style={{ height: 20 }} />
+
+          <AppButton 
+            title="Create Account" 
+            onPress={handleSubmit(() => setShowDisclaimer(true))} 
+            disabled={!formState.isValid} 
+          />
+          
+          <TouchableOpacity onPress={() => navigation.navigate('Login')} style={{ padding: 12, alignItems: 'center' }}>
+            <Text style={{ color: COLORS.textSecondary }}>Already have an account? <Text style={{ color: COLORS.accent, fontWeight: 'bold' }}>Login</Text></Text>
+          </TouchableOpacity>
+
+        </View>
+        
+        <View style={{ height: 40 }} /> 
+      </KeyboardAvoidingView>
+
+      {/* Disclaimer Modal */}
+      <Modal visible={showDisclaimer} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.disclaimerCard}>
-            <Text style={styles.disclaimerTitle}>Data Use & Consent</Text>
-            <Text style={styles.disclaimerText}>
-              By creating an account you consent to the collection and limited use of the personal and emergency contact
-              information you provide, solely to deliver emergency-response and safety services. Your data will be handled
-              securely and in accordance with our privacy practices.
+          <View style={styles.modalCard}>
+            <Ionicons name="shield-checkmark" size={42} color={COLORS.accent} style={{ marginBottom: 12 }} />
+            <Text style={styles.modalTitle}>Data Privacy Consent</Text>
+            <Text style={styles.modalText}>
+              Your safety is our priority. By continuing, you agree that your location and emergency contact details will only be used to trigger SOS alerts when you press the panic button.
             </Text>
-
-            <View style={styles.disclaimerActions}>
-              <TouchableOpacity style={[styles.disclaimerBtn, styles.disclaimerBtnGhost]} onPress={() => setShowDisclaimerModal(false)}>
-                <Text style={styles.disclaimerBtnGhostText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <View style={{ width: 10 }} />
-
-              <TouchableOpacity
-                style={[styles.disclaimerBtn, styles.disclaimerBtnPrimary]}
-                onPress={handleSubmit(onSubmit)}
-                activeOpacity={0.9}
-              >
-                <Text style={styles.disclaimerBtnPrimaryText} numberOfLines={1} ellipsizeMode="tail">
-                  I Accept — Create account
-                </Text>
-              </TouchableOpacity>
+            <View style={styles.modalActions}>
+              <AppButton title="Cancel" onPress={() => setShowDisclaimer(false)} variant="ghost" style={{ flex: 1, marginRight: 8 }} />
+              <AppButton title="I Agree" onPress={handleSubmit(onSubmit)} style={{ flex: 1, marginLeft: 8 }} />
             </View>
           </View>
         </View>
       </Modal>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, width: '100%', alignItems: 'center' }}
-      >
-        <ScrollView
-          // crucial: ensure the scroll area is at least viewport-high so browser scrolling works
-          contentContainerStyle={[styles.scrollContent, { flexGrow: 1, minHeight: SCREEN_HEIGHT }]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={true}
-          style={{ width: '100%' }}
-        >
-          <Animated.View
-            style={[
-              styles.headerWrap,
-              {
-                opacity: headingAnim,
-                transform: [{ translateY: headingAnim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
-              },
-            ]}
-          >
-            <Text style={styles.h1}>Create an Account</Text>
-            <Text style={styles.h2}>Register quickly — all fields are required for safety.</Text>
-          </Animated.View>
-
-          <View style={[styles.card, { maxWidth: CARD_MAX_WIDTH, width: '100%' }]}>
-            {/* each field stacked vertically, modular */}
-            <Controller control={control} name="firstName" render={({ field, fieldState }) => (
-              <AppInput
-                label="First name"
-                icon="person"
-                value={field.value}
-                onChangeText={field.onChange}
-                onBlur={field.onBlur}
-                placeholder="John"
-                error={fieldState.error?.message}
-              />
-            )} />
-
-            <Controller control={control} name="lastName" render={({ field, fieldState }) => (
-              <AppInput
-                label="Last name"
-                icon="person-outline"
-                value={field.value}
-                onChangeText={field.onChange}
-                onBlur={field.onBlur}
-                placeholder="Doe"
-                error={fieldState.error?.message}
-              />
-            )} />
-
-            <Controller control={control} name="dob" render={({ field, fieldState }) => (
-              <DatePickerField
-                label="Date of Birth"
-                value={field.value}
-                onChange={(val: string) => setValue('dob', val, { shouldValidate: true })}
-                error={fieldState.error?.message}
-              />
-            )} />
-
-            <Controller control={control} name="phone" render={({ field, fieldState }) => (
-              <View style={styles.phoneRowFull}>
-                <CountryPill />
-                <AppInput
-                  label="Phone number"
-                  placeholder="5551234567"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  onBlur={field.onBlur}
-                  error={fieldState.error?.message}
-                  keyboardType="number-pad"
-                />
-              </View>
-            )} />
-
-            <Controller control={control} name="password" render={({ field, fieldState }) => (
-              <PasswordInput
-                label="Password"
-                value={field.value}
-                onChangeText={field.onChange}
-                error={fieldState.error?.message}
-                placeholder="6-15 chars, at least one number"
-              />
-            )} />
-
-            <Controller control={control} name="agent" render={({ field, fieldState }) => (
-              <AppInput
-                label="Agent name"
-                icon="business"
-                value={field.value}
-                onChangeText={field.onChange}
-                onBlur={field.onBlur}
-                error={fieldState.error?.message}
-                placeholder="Agent name"
-              />
-            )} />
-
-            {/* emergency contacts: inline stacked collapsible for clarity */}
-            <Collapsible title="Emergency Contact 1 (required)" startOpen>
-              <Controller control={control} name="ec1Name" render={({ field, fieldState }) => (
-                <AppInput label="Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
-              )} />
-              <Controller control={control} name="ec1Phone" render={({ field, fieldState }) => (
-                <AppInput label="Phone" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} keyboardType="number-pad" />
-              )} />
-            </Collapsible>
-
-            <Collapsible title="Emergency Contact 2 (required)">
-              <Controller control={control} name="ec2Name" render={({ field, fieldState }) => (
-                <AppInput label="Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
-              )} />
-              <Controller control={control} name="ec2Phone" render={({ field, fieldState }) => (
-                <AppInput label="Phone" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} keyboardType="number-pad" />
-              )} />
-            </Collapsible>
-
-            <Collapsible title="Emergency Contact 3 (required)">
-              <Controller control={control} name="ec3Name" render={({ field, fieldState }) => (
-                <AppInput label="Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
-              )} />
-              <Controller control={control} name="ec3Phone" render={({ field, fieldState }) => (
-                <AppInput label="Phone" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} keyboardType="number-pad" />
-              )} />
-            </Collapsible>
-
-            <Text style={styles.help}>We’ll only use this information for emergency contact and safety.</Text>
-
-            <View style={{ height: 12 }} />
-
-            {/* instead of directly submitting, open the disclaimer modal for final consent */}
-            <AppButton title="Create Account" disabled={!formState.isValid} onPress={() => setShowDisclaimerModal(true)} />
-          </View>
-
-          <View style={styles.loginRow}>
-            <Text style={styles.smallText}>Already have an account?</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.linkText}> Login</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
     </ScreenContainer>
   );
 }
 
-/* ---------- styles ---------- */
+/*Styles*/
 const styles = StyleSheet.create({
-  scrollContent: {
-    paddingHorizontal: HORIZONTAL_PADDING,
-    paddingTop: 18,
-    paddingBottom: 120,
-    width: '100%',
-    alignItems: 'center',
-  },
-  headerWrap: { width: '100%', marginBottom: 12, alignItems: 'flex-start' },
-  h1: { color: COLORS.textPrimary, fontSize: 24, fontWeight: '800', marginBottom: 6 },
-  h2: { color: COLORS.textSecondary, fontSize: 13.5 },
-
+  header: { width: '100%', marginBottom: 20, marginTop: 10, flexDirection: 'row', alignItems: 'center' },
+  backBtn: { padding: 8, marginRight: 8, borderRadius: 999, backgroundColor: '#1A2018' },
+  title: { color: COLORS.textPrimary, fontSize: 24, fontWeight: '800' },
+  subtitle: { color: COLORS.textSecondary, fontSize: 14 },
+  
   card: {
-    width: '100%',
-    borderRadius: 14,
-    padding: 18,
-    backgroundColor: '#0C0E0B',
-    // soft shadow
-    ...(Platform.OS === 'web' ? ({ boxShadow: '0 12px 30px rgba(0,0,0,0.36)' } as any) : { shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 12, elevation: 6 }),
-    marginBottom: 20,
-  },
-
-  phoneRowFull: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 0,
-  },
-  countryPill: {
-    minWidth: 86,
-    paddingHorizontal: 10,
-    height: LAYOUT.controlHeight,
-    borderRadius: LAYOUT.borderRadius,
-    backgroundColor: '#0A0C09',
+    backgroundColor: '#0C0E0B', // slightly lighter than background
+    borderRadius: 16,
+    padding: 20,
     borderWidth: 1,
-    borderColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
+    borderColor: '#1F241D',
+  },
+  sectionTitle: { color: COLORS.accent, fontSize: 16, fontWeight: '700', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionSub: { color: COLORS.textSecondary, fontSize: 12, marginBottom: 12, marginTop: -6 },
+  row: { flexDirection: 'row', justifyContent: 'space-between' },
+  divider: { height: 1, backgroundColor: '#1F241D', marginVertical: 16 },
+  
+  label: { color: COLORS.textSecondary, marginBottom: 8, fontSize: 13 },
+  phoneRow: { flexDirection: 'row' },
+  countryPill: {
+    justifyContent: 'center', alignItems: 'center', 
+    paddingHorizontal: 12, backgroundColor: '#1A2018', 
+    borderRadius: LAYOUT.borderRadius, marginRight: 8,
+    height: LAYOUT.controlHeight, borderWidth: 1, borderColor: '#2A3028'
   },
   countryText: { color: COLORS.textPrimary, fontWeight: '700' },
 
-  help: { color: COLORS.textSecondary, fontSize: 12, marginTop: 8 },
-
-  loginRow: { width: '100%', flexDirection: 'row', justifyContent: 'center', marginTop: 6 },
-  smallText: { color: COLORS.textSecondary },
-  linkText: { color: COLORS.accent, fontWeight: '700' },
-
-  /* ---- disclaimer modal styles ---- */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(4,6,4,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  disclaimerCard: {
-    width: Math.min(760, SCREEN_WIDTH - 48),
-    backgroundColor: '#0C0E0B',
-    borderRadius: 12,
-    padding: 14,
-    ...(Platform.OS === 'web' ? ({ boxShadow: '0 16px 40px rgba(0,0,0,0.45)' } as any) : { shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 12, elevation: 8 }),
-  },
-  disclaimerTitle: { color: COLORS.textPrimary, fontSize: 16, fontWeight: '800', marginBottom: 8 },
-  disclaimerText: { color: COLORS.textSecondary, fontSize: 13, lineHeight: 18 },
-
-  disclaimerActions: { marginTop: 12, flexDirection: 'row', alignItems: 'center' },
-  disclaimerBtn: { flex: 1, height: LAYOUT.controlHeight, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-  disclaimerBtnGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', marginRight: 10 },
-  disclaimerBtnPrimary: { backgroundColor: COLORS.accent },
-  disclaimerBtnGhostText: { color: COLORS.textPrimary, fontWeight: '700', fontSize: 14 },
-  disclaimerBtnPrimaryText: { color: '#0F150D', fontWeight: '800', fontSize: 14 },
+  /* Modal */
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalCard: { backgroundColor: '#141812', padding: 24, borderRadius: 20, width: '100%', maxWidth: 400, alignItems: 'center', borderWidth: 1, borderColor: '#2A3028' },
+  modalTitle: { color: COLORS.textPrimary, fontSize: 20, fontWeight: 'bold', marginBottom: 12 },
+  modalText: { color: COLORS.textSecondary, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  modalActions: { flexDirection: 'row', width: '100%' }
 });

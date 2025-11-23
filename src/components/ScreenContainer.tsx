@@ -1,46 +1,63 @@
 // src/components/ScreenContainer.tsx
 import React from 'react';
-import { View, SafeAreaView, ScrollView, StyleSheet, Dimensions, Platform } from 'react-native';
+import { View, SafeAreaView, ScrollView, StyleSheet, Dimensions, Platform, ViewStyle, StatusBar } from 'react-native';
 import { COLORS, LAYOUT } from '../styles/theme';
 
 type Props = {
   children?: React.ReactNode;
   scrollable?: boolean;
+  style?: ViewStyle;
 };
 
 const { height: WINDOW_HEIGHT } = Dimensions.get('window');
 
-export default function ScreenContainer({ children, scrollable = true }: Props) {
-  if (scrollable) {
-    return (
-      <SafeAreaView style={styles.safe}>
+export default function ScreenContainer({ children, scrollable = true, style }: Props) {
+  return (
+    <SafeAreaView style={styles.safe}>
+      {/* Ensure status bar style matches theme */}
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      
+      {scrollable ? (
         <ScrollView
-          contentContainerStyle={[styles.container, { minHeight: WINDOW_HEIGHT }]}
+          style={{ flex: 1 }}
+          contentContainerStyle={[styles.scrollContent]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {children}
+          <View style={[styles.inner, style]}>
+            {children}
+          </View>
         </ScrollView>
-      </SafeAreaView>
-    );
-  }
-  return (
-    <SafeAreaView style={styles.safe}>
-      <View style={[styles.container, { minHeight: WINDOW_HEIGHT }]}>{children}</View>
+      ) : (
+        <View style={[styles.container, style]}>
+          {children}
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
-  // IMPORTANT: use flex-start alignment here; child screens will control centering
+  safe: { 
+    flex: 1, 
+    backgroundColor: COLORS.background 
+  },
   container: {
-    flexGrow: 1,
     flex: 1,
     padding: LAYOUT.pagePadding,
     alignItems: 'center',
     justifyContent: 'flex-start',
-    // small platform tweak for web to make sure scrolling works nicely
+  },
+  // For scrollable views, we use flexGrow to fill space but allow expansion
+  scrollContent: {
+    flexGrow: 1,
+    paddingVertical: LAYOUT.pagePadding,
+    // On web, this helps with smooth momentum scrolling
     ...(Platform.OS === 'web' ? { WebkitOverflowScrolling: 'touch' as any } : {}),
   },
+  inner: {
+    width: '100%',
+    paddingHorizontal: LAYOUT.pagePadding,
+    alignItems: 'center',
+  }
 });
