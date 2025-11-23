@@ -66,14 +66,14 @@ export default function Login({ navigation }: any) {
 
   /* --- STATE --- */
   const [forgotVisible, setForgotVisible] = useState(false);
-  const [alertConfig, setAlertConfig] = useState<{visible: boolean, title: string, message: string, type: 'success' | 'error'}>({
+  const [alertConfig, setAlertConfig] = useState<{ visible: boolean, title: string, message: string, type: 'success' | 'error' }>({
     visible: false, title: '', message: '', type: 'error'
   });
 
   /* --- FORGOT PASSWORD FORM --- */
-  const { 
-    control: identityControl, 
-    handleSubmit: handleIdentitySubmit, 
+  const {
+    control: identityControl,
+    handleSubmit: handleIdentitySubmit,
     formState: identityState,
     reset: resetIdentity
   } = useForm({
@@ -87,7 +87,17 @@ export default function Login({ navigation }: any) {
   };
 
   /* --- HANDLERS --- */
+  // Inside src/screens/Login.tsx
+
   const onLogin = (data: any) => {
+    // ADMIN CHECK
+    if (data.email.toLowerCase() === 'admin@bond.com' && data.password === 'admin123') {
+      // Navigate to Admin Flow
+      navigation.reset({ index: 0, routes: [{ name: 'AdminLanding' }] });
+      return;
+    }
+
+    // EXISTING USER CHECK
     if (data.email.toLowerCase() === 'demo@bond.com' && data.password === 'bond123') {
       demoStore.setUser(MOCK_USER);
       navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] });
@@ -98,8 +108,8 @@ export default function Login({ navigation }: any) {
 
   const onVerifyIdentity = (data: any) => {
     // Mock Verification
-    const isValid = 
-      (data.email.toLowerCase() === MOCK_USER.email || true) && 
+    const isValid =
+      (data.email.toLowerCase() === MOCK_USER.email || true) &&
       data.agent.trim().toLowerCase() === MOCK_USER.agent.toLowerCase() &&
       (data.dob === MOCK_USER.dob || data.dob === '05/15/1985') &&
       (data.phone === MOCK_USER.phone.replace('+1', '') || data.phone === '5615550100');
@@ -122,8 +132,8 @@ export default function Login({ navigation }: any) {
 
   return (
     <ScreenContainer scrollable={false}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.container}
       >
         <View style={styles.header}>
@@ -136,25 +146,25 @@ export default function Login({ navigation }: any) {
 
         <View style={styles.form}>
           <Controller control={control} name="email" render={({ field, fieldState }) => (
-            <AppInput 
-              label="Email Address" 
-              placeholder="Enter your email" 
-              icon="mail-outline" 
-              value={field.value} 
-              onChangeText={field.onChange} 
-              error={fieldState.error?.message} 
-              autoCapitalize="none" 
-              keyboardType="email-address" 
+            <AppInput
+              label="Email Address"
+              placeholder="Enter your email"
+              icon="mail-outline"
+              value={field.value}
+              onChangeText={field.onChange}
+              error={fieldState.error?.message}
+              autoCapitalize="none"
+              keyboardType="email-address"
             />
           )} />
 
           <Controller control={control} name="password" render={({ field, fieldState }) => (
-            <PasswordInput 
-              label="Password" 
-              placeholder="Enter password" 
-              value={field.value} 
-              onChangeText={field.onChange} 
-              error={fieldState.error?.message} 
+            <PasswordInput
+              label="Password"
+              placeholder="Enter password"
+              value={field.value}
+              onChangeText={field.onChange}
+              error={fieldState.error?.message}
             />
           )} />
 
@@ -164,10 +174,10 @@ export default function Login({ navigation }: any) {
 
           <View style={{ height: 24 }} />
 
-          <AppButton 
-            title="Login" 
-            onPress={handleSubmit(onLogin)} 
-            disabled={!formState.isValid} 
+          <AppButton
+            title="Login"
+            onPress={handleSubmit(onLogin)}
+            disabled={!formState.isValid}
           />
 
           <View style={styles.footer}>
@@ -183,7 +193,7 @@ export default function Login({ navigation }: any) {
       <Modal visible={forgotVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            
+
             <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <Text style={styles.modalTitle}>Recover Account</Text>
               <Text style={styles.modalSub}>Verify details to login securely.</Text>
@@ -191,14 +201,14 @@ export default function Login({ navigation }: any) {
               <Controller control={identityControl} name="email" render={({ field, fieldState }) => (
                 <AppInput label="Email" placeholder="Enter email" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
               )} />
-              
+
               <Controller control={identityControl} name="phone" render={({ field, fieldState }) => (
                 <View style={{ marginBottom: 14 }}>
                   <Text style={styles.label}>Phone Number</Text>
-                  <PhoneInput 
-                    value={field.value} 
-                    onChange={field.onChange} 
-                    countryCode="+1" 
+                  <PhoneInput
+                    value={field.value}
+                    onChange={field.onChange}
+                    countryCode="+1"
                     placeholder="1234567890"
                     error={fieldState.error?.message}
                   />
@@ -231,7 +241,7 @@ export default function Login({ navigation }: any) {
         icon={alertConfig.type === 'success' ? 'checkmark-circle' : 'alert-circle'}
         variant={alertConfig.type === 'success' ? 'primary' : 'danger'}
         confirmText="OK"
-        cancelText="" 
+        cancelText=""
         onConfirm={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
         onCancel={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
       />
@@ -253,11 +263,11 @@ const styles = StyleSheet.create({
   footerText: { color: COLORS.textSecondary, fontSize: 14 },
   link: { color: COLORS.accent, fontWeight: 'bold', fontSize: 14 },
   label: { color: COLORS.textSecondary, marginBottom: 8, fontSize: 13 },
-  
+
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalCard: { 
-    backgroundColor: '#141812', padding: 24, borderRadius: 24, width: '100%', maxWidth: 420, 
-    borderWidth: 1, borderColor: '#2A3028', maxHeight: '90%' 
+  modalCard: {
+    backgroundColor: '#141812', padding: 24, borderRadius: 24, width: '100%', maxWidth: 420,
+    borderWidth: 1, borderColor: '#2A3028', maxHeight: '90%'
   },
   modalTitle: { color: COLORS.textPrimary, fontSize: 22, fontWeight: 'bold', marginBottom: 4, textAlign: 'center' },
   modalSub: { color: COLORS.textSecondary, fontSize: 14, marginBottom: 20, textAlign: 'center' },
