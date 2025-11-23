@@ -1,10 +1,10 @@
 // src/components/PasswordInput.tsx
 import React, { useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, TextInput, Text, StyleSheet, TouchableOpacity, Platform, TextInputProps } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, LAYOUT } from '../styles/theme';
 
-type Props = {
+type Props = TextInputProps & {
   label?: string;
   value?: string;
   onChangeText?: (t: string) => void;
@@ -12,8 +12,8 @@ type Props = {
   error?: string | null;
 };
 
-export default function PasswordInput({ label, value, onChangeText, placeholder, error }: Props) {
-  // Default to TRUE (Visible)
+export default function PasswordInput({ label, value, onChangeText, placeholder, error, ...rest }: Props) {
+  // Default to true (Visible) as requested previously
   const [show, setShow] = useState(true);
 
   return (
@@ -21,19 +21,19 @@ export default function PasswordInput({ label, value, onChangeText, placeholder,
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <View style={[styles.wrapper, error ? { borderColor: COLORS.error } : null]}>
         <TextInput
-          // If show is true, secureTextEntry is false (visible)
+          {...rest}
           secureTextEntry={!show}
-          value={value}
+          value={value || ''} // Prevent undefined value
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor="#7A7A7A"
           style={styles.input}
           
-          // Stability props for smooth typing
+          // Stability props
           autoCapitalize="none"
           autoCorrect={false}
           spellCheck={false}
-          textContentType="none" // Prevents OS keychain flickering
+          textContentType="none"
           importantForAutofill="no"
           autoComplete="off"
           
@@ -45,9 +45,6 @@ export default function PasswordInput({ label, value, onChangeText, placeholder,
           style={styles.eyeBtn}
           activeOpacity={0.7}
         >
-          {/* show = true (Visible) -> Icon 'eye' (Open eye)
-             show = false (Hidden) -> Icon 'eye-off' (Slashed eye)
-          */}
           <Ionicons 
             name={show ? 'eye' : 'eye-off'} 
             size={20} 
@@ -78,7 +75,6 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary, 
     fontSize: 16, 
     height: '100%',
-    // Using tabular-nums keeps character width consistent when masking
     fontVariant: ['tabular-nums'],
   },
   eyeBtn: {

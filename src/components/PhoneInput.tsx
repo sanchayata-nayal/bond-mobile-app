@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 type Props = {
   value?: string;
   onChange: (val: string) => void;
-  countryCode?: string; // e.g. +1
+  countryCode?: string; 
   onCountryChange?: (code: string) => void;
   placeholder?: string;
   error?: string | null;
@@ -34,12 +34,12 @@ export default function PhoneInput({
 }: Props) {
   const [openCountries, setOpenCountries] = useState(false);
   
-  // Track the full country object locally to distinguish between countries with same code (e.g., US vs CA)
+  // Track selected country object
   const [selectedCountry, setSelectedCountry] = useState(
     COMMON_COUNTRIES.find(c => c.code === countryCode) || COMMON_COUNTRIES[0]
   );
 
-  // Sync local state if parent updates countryCode prop from outside
+  // Sync if prop changes
   useEffect(() => {
     if (countryCode !== selectedCountry.code) {
       const match = COMMON_COUNTRIES.find(c => c.code === countryCode);
@@ -59,7 +59,7 @@ export default function PhoneInput({
   }
 
   return (
-    <View style={{ marginBottom: 14, zIndex: openCountries ? 100 : 1 }}>
+    <View style={{ marginBottom: 14, zIndex: openCountries ? 5000 : 1 }}>
       <View style={[styles.row, error ? { borderColor: COLORS.error } : null]}>
         {/* Country Code Selector */}
         <TouchableOpacity 
@@ -69,7 +69,7 @@ export default function PhoneInput({
         >
           <Text style={styles.flag}>{selectedCountry.flag}</Text>
           <Text style={styles.codeText}>{selectedCountry.code}</Text>
-          <Ionicons name={openCountries ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textSecondary} style={{ marginLeft: 4 }} />
+          <Ionicons name={openCountries ? 'chevron-up' : 'chevron-down'} size={12} color={COLORS.textSecondary} style={{ marginLeft: 4 }} />
         </TouchableOpacity>
 
         {/* Divider */}
@@ -88,17 +88,22 @@ export default function PhoneInput({
 
       {/* Dropdown */}
       {openCountries && (
-        <View style={styles.dropdown}>
-          <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+        <View style={styles.dropdownContainer}>
+          <ScrollView 
+            style={styles.scroll} 
+            nestedScrollEnabled 
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={true}
+          >
             {COMMON_COUNTRIES.map((c) => (
               <TouchableOpacity 
                 key={c.label} 
-                style={[styles.countryRow, c.label === selectedCountry.label && { backgroundColor: 'rgba(255,255,255,0.05)' }]} 
+                style={[styles.countryRow, c.label === selectedCountry.label && { backgroundColor: 'rgba(255,255,255,0.08)' }]} 
                 onPress={() => handleSelect(c)}
               >
-                <Text style={{ marginRight: 12, fontSize: 20 }}>{c.flag}</Text>
-                <Text style={{ color: COLORS.textPrimary, flex: 1, fontSize: 15 }}>{c.label}</Text>
-                <Text style={{ color: COLORS.accent, fontWeight: '700' }}>{c.code}</Text>
+                <Text style={styles.rowFlag}>{c.flag}</Text>
+                <Text style={styles.rowLabel}>{c.label}</Text>
+                <Text style={styles.rowCode}>{c.code}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -127,8 +132,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   },
-  flag: { fontSize: 18, marginRight: 6 },
-  codeText: { color: COLORS.textPrimary, fontWeight: '700', fontSize: 15 },
+  flag: { fontSize: 16, marginRight: 6 },
+  codeText: { color: COLORS.textPrimary, fontWeight: '700', fontSize: 14 },
   vertDivider: { width: 1, height: '60%', backgroundColor: '#2A3028' },
   input: { 
     flex: 1, 
@@ -137,7 +142,9 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary, 
     fontSize: 16 
   },
-  dropdown: { 
+  
+  /* Dropdown Styles */
+  dropdownContainer: { 
     position: 'absolute', 
     top: LAYOUT.controlHeight + 4, 
     left: 0, right: 0, 
@@ -145,19 +152,28 @@ const styles = StyleSheet.create({
     borderRadius: 10, 
     borderWidth: 1, 
     borderColor: '#2A3028', 
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
+    height: 200, // Explicit height helps scrolling
+    zIndex: 5000,
     elevation: 10,
-    overflow: 'hidden'
+    overflow: 'hidden',
+    ...Platform.select({
+      web: { boxShadow: '0 8px 20px rgba(0,0,0,0.5)' } as any
+    })
+  },
+  scroll: {
+    flex: 1,
   },
   countryRow: { 
-    padding: 14, 
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     flexDirection: 'row', 
     alignItems: 'center', 
     borderBottomWidth: 1, 
     borderBottomColor: '#1F241D' 
   },
+  rowFlag: { fontSize: 18, marginRight: 12 },
+  rowLabel: { color: COLORS.textPrimary, flex: 1, fontSize: 14 },
+  rowCode: { color: COLORS.accent, fontWeight: '700', fontSize: 13 },
+  
   err: { color: COLORS.error, marginTop: 6, fontSize: 12 },
 });

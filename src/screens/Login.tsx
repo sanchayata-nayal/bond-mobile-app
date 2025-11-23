@@ -19,7 +19,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import PhoneInput from '../components/PhoneInput';
 import { useForm, Controller } from 'react-hook-form';
 import { demoStore } from '../services/demoStore';
-import { COLORS, LAYOUT } from '../styles/theme';
+import { COLORS } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -40,49 +40,45 @@ const MOCK_USER = {
   ],
 };
 
-/* ---------- SCHEMAS ---------- */
+/* ---------- VALIDATION SCHEMAS ---------- */
+const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/;
+const PASSWORD_ERROR = 'Min 6 chars, letters & numbers required';
+
 const loginSchema = yup.object({
-  email: yup.string().email('Invalid email').required('Email required'),
-  password: yup.string().required('Password required').min(6, 'Min 6 characters'),
+  email: yup.string().email('Please enter a valid email').required('Email required'),
+  password: yup.string().required('Password required').matches(PASSWORD_REGEX, PASSWORD_ERROR),
 }).required();
 
 const forgotIdentitySchema = yup.object({
-  email: yup.string().email('Invalid email').required('Required'),
-  phone: yup.string().required('Required').min(10, '10 digits required'),
+  email: yup.string().email('Invalid email format').required('Required'),
+  phone: yup.string().required('Required').matches(/^\d{10}$/, '10 digits required'),
   dob: yup.string().required('Required'),
   agent: yup.string().required('Required'),
 }).required();
 
-// New Schema: No OTP, just New Password
 const forgotResetSchema = yup.object({
-  newPassword: yup.string().required('Required').min(6, 'Min 6 characters'),
+  newPassword: yup.string().required('Required').matches(PASSWORD_REGEX, PASSWORD_ERROR),
   confirmPassword: yup.string()
     .required('Required')
     .oneOf([yup.ref('newPassword')], 'Passwords must match'),
 }).required();
 
 export default function Login({ navigation }: any) {
-  /* --- LOGIN STATE --- */
+  /* --- LOGIN FORM --- */
   const { control, handleSubmit, formState } = useForm({
     defaultValues: { email: '', password: '' },
     resolver: yupResolver(loginSchema),
     mode: 'onChange'
   });
 
-  /* --- FORGOT PASSWORD STATE --- */
+  /* --- STATE --- */
   const [forgotVisible, setForgotVisible] = useState(false);
-  const [resetStep, setResetStep] = useState<1 | 2>(1); // 1 = Verify, 2 = Reset
-  
-  /* --- ALERT STATE --- */
+  const [resetStep, setResetStep] = useState<1 | 2>(1);
   const [alertConfig, setAlertConfig] = useState<{visible: boolean, title: string, message: string, type: 'success' | 'error'}>({
     visible: false, title: '', message: '', type: 'error'
   });
 
-  const showAlert = (title: string, message: string, type: 'success' | 'error') => {
-    setAlertConfig({ visible: true, title, message, type });
-  };
-
-  /* --- FORMS --- */
+  /* --- FORGOT PASSWORD FORMS --- */
   const { 
     control: identityControl, 
     handleSubmit: handleIdentitySubmit, 
@@ -103,6 +99,10 @@ export default function Login({ navigation }: any) {
     resolver: yupResolver(forgotResetSchema),
   });
 
+  const showAlert = (title: string, message: string, type: 'success' | 'error') => {
+    setAlertConfig({ visible: true, title, message, type });
+  };
+
   /* --- HANDLERS --- */
   const onLogin = (data: any) => {
     if (data.email.toLowerCase() === 'demo@bond.com' && data.password === 'bond123') {
@@ -114,28 +114,27 @@ export default function Login({ navigation }: any) {
   };
 
   const onVerifyIdentity = (data: any) => {
-    // Case Insensitive Check for Agent & Email
+    // Mock Verification
     const isValid = 
-      (data.email.toLowerCase() === MOCK_USER.email || true) && // Allow test emails for now
-      data.agent.toLowerCase() === MOCK_USER.agent.toLowerCase() &&
-      (data.dob === MOCK_USER.dob || data.dob === '05/15/1985');
+      (data.email.toLowerCase() === MOCK_USER.email || true) && 
+      data.agent.trim().toLowerCase() === MOCK_USER.agent.toLowerCase() &&
+      (data.dob === MOCK_USER.dob || data.dob === '05/15/1985') &&
+      (data.phone === MOCK_USER.phone.replace('+1', '') || data.phone === '5615550100');
 
     if (isValid) {
-      // Direct to Step 2
       setResetStep(2);
     } else {
-      showAlert('Verification Failed', 'The details provided do not match our records.', 'error');
+      showAlert('Verification Failed', 'Details do not match our records.', 'error');
     }
   };
 
   const onFinalizeReset = (data: any) => {
-    // Here you would update the password in backend
     setForgotVisible(false);
     setResetStep(1);
     resetIdentity();
     resetFinal();
     setTimeout(() => {
-      showAlert('Success', 'Your password has been updated. You can now login.', 'success');
+      showAlert('Success', 'Password updated successfully. Please login.', 'success');
     }, 500);
   };
 
@@ -177,7 +176,7 @@ export default function Login({ navigation }: any) {
           <Controller control={control} name="password" render={({ field, fieldState }) => (
             <PasswordInput 
               label="Password" 
-              placeholder="Enter your password" 
+              placeholder="Enter password" 
               value={field.value} 
               onChangeText={field.onChange} 
               error={fieldState.error?.message} 
@@ -212,7 +211,7 @@ export default function Login({ navigation }: any) {
             
             {resetStep === 1 ? (
               /* STEP 1: VERIFY */
-              <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false}>
+              <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <Text style={styles.modalTitle}>Recover Account</Text>
                 <Text style={styles.modalSub}>Enter your details to verify identity.</Text>
 
@@ -223,12 +222,18 @@ export default function Login({ navigation }: any) {
                 <Controller control={identityControl} name="phone" render={({ field, fieldState }) => (
                   <View style={{ marginBottom: 14 }}>
                     <Text style={styles.label}>Phone Number</Text>
-                    <PhoneInput value={field.value} onChange={field.onChange} countryCode="+1" placeholder="1234567890" error={fieldState.error?.message} />
+                    <PhoneInput 
+                      value={field.value} 
+                      onChange={field.onChange} 
+                      countryCode="+1" 
+                      placeholder="1234567890"
+                      error={fieldState.error?.message}
+                    />
                   </View>
                 )} />
 
                 <Controller control={identityControl} name="agent" render={({ field, fieldState }) => (
-                  <AppInput label="Agent Name" placeholder="Agent Smith" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+                  <AppInput label="Agent Name" placeholder="Enter Agent Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
                 )} />
 
                 <Controller control={identityControl} name="dob" render={({ field, fieldState }) => (
@@ -241,25 +246,26 @@ export default function Login({ navigation }: any) {
                 </View>
               </ScrollView>
             ) : (
-              /* STEP 2: RESET */
-              <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false}>
+              /* STEP 2: RESET (Now editable!) */
+              <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <Text style={styles.modalTitle}>Set New Password</Text>
                 <Text style={styles.modalSub}>Identity verified. Create a new password.</Text>
 
                 <Controller control={resetControl} name="newPassword" render={({ field, fieldState }) => (
                   <PasswordInput 
                     label="New Password" 
-                    placeholder="Min 6 chars" 
+                    placeholder="Min 6 chars (Alpha-numeric)" 
                     value={field.value} 
                     onChangeText={field.onChange} 
                     error={fieldState.error?.message}
+                    autoFocus={true} // Auto focus to start typing immediately
                   />
                 )} />
 
                 <Controller control={resetControl} name="confirmPassword" render={({ field, fieldState }) => (
                   <PasswordInput 
                     label="Confirm Password" 
-                    placeholder="Re-enter password" 
+                    placeholder="Re-enter new password" 
                     value={field.value} 
                     onChangeText={field.onChange} 
                     error={fieldState.error?.message}
@@ -285,7 +291,7 @@ export default function Login({ navigation }: any) {
         icon={alertConfig.type === 'success' ? 'checkmark-circle' : 'alert-circle'}
         variant={alertConfig.type === 'success' ? 'primary' : 'danger'}
         confirmText="OK"
-        cancelText="" // Single button
+        cancelText="" 
         onConfirm={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
         onCancel={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
       />
