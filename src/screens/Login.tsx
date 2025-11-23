@@ -87,6 +87,7 @@ export default function Login({ navigation }: any) {
   } = useForm({
     defaultValues: { email: '', phone: '', dob: '', agent: '' },
     resolver: yupResolver(forgotIdentitySchema),
+    // Removed shouldUnregister: false (Fixes the frozen input issue)
   });
 
   const { 
@@ -97,6 +98,7 @@ export default function Login({ navigation }: any) {
   } = useForm({
     defaultValues: { newPassword: '', confirmPassword: '' },
     resolver: yupResolver(forgotResetSchema),
+    // Removed shouldUnregister: false
   });
 
   const showAlert = (title: string, message: string, type: 'success' | 'error') => {
@@ -246,7 +248,7 @@ export default function Login({ navigation }: any) {
                 </View>
               </ScrollView>
             ) : (
-              /* STEP 2: RESET (Now editable!) */
+              /* STEP 2: RESET */
               <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <Text style={styles.modalTitle}>Set New Password</Text>
                 <Text style={styles.modalSub}>Identity verified. Create a new password.</Text>
@@ -258,7 +260,7 @@ export default function Login({ navigation }: any) {
                     value={field.value} 
                     onChangeText={field.onChange} 
                     error={fieldState.error?.message}
-                    autoFocus={true} // Auto focus to start typing immediately
+                    autoFocus={true} // Focuses immediately so you can type
                   />
                 )} />
 

@@ -13,7 +13,7 @@ type Props = TextInputProps & {
 };
 
 export default function PasswordInput({ label, value, onChangeText, placeholder, error, ...rest }: Props) {
-  // Default to true (Visible) as requested previously
+  // Default to true (Visible) as requested
   const [show, setShow] = useState(true);
 
   return (
@@ -23,7 +23,7 @@ export default function PasswordInput({ label, value, onChangeText, placeholder,
         <TextInput
           {...rest}
           secureTextEntry={!show}
-          value={value || ''} // Prevent undefined value
+          value={value || ''} // Fix: Ensure never undefined to prevent freezing
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor="#7A7A7A"
