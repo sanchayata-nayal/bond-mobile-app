@@ -1,21 +1,31 @@
 // src/screens/UserDetails.tsx
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  Alert, 
+  KeyboardAvoidingView, 
+  Platform, 
+  TouchableOpacity,
+  Modal,
+  TextInput
+} from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import DashboardHeader from '../components/DashboardHeader';
 import AppInput from '../components/AppInput';
 import AppButton from '../components/AppButton';
 import DatePickerField from '../components/DatePickerField';
 import Collapsible from '../components/Collapsible';
-import ConfirmationModal from '../components/ConfirmationModal'; // New
+import ConfirmationModal from '../components/ConfirmationModal';
 import { demoStore } from '../services/demoStore';
-import { COLORS } from '../styles/theme';
+import { COLORS, LAYOUT } from '../styles/theme';
 import { useForm, Controller } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { Ionicons } from '@expo/vector-icons';
 
-/* ---------- Schema (Same) ---------- */
+/* ---------- Schemas ---------- */
 const schema = yup.object({
   firstName: yup.string().required('First name is required'),
   lastName: yup.string(),
@@ -30,12 +40,19 @@ const schema = yup.object({
   ec3Phone: yup.string().required('Contact 3 Phone required'),
 }).required();
 
+const passwordSchema = yup.object({
+  newPassword: yup.string().required('Required').min(6, 'Min 6 chars').matches(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/, 'Alpha-numeric required'),
+  confirmPassword: yup.string().required('Required').oneOf([yup.ref('newPassword')], 'Passwords must match'),
+}).required();
+
 export default function UserDetails({ navigation }: any) {
   const user = demoStore.getUser();
   const [isEditing, setIsEditing] = useState(false);
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
   const [successVisible, setSuccessVisible] = useState(false);
+  
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
 
   const { control, handleSubmit, reset } = useForm({
     defaultValues: {
@@ -52,6 +69,15 @@ export default function UserDetails({ navigation }: any) {
       ec3Phone: user?.emergencyContacts?.[2]?.phone?.replace('+1', '') || '',
     },
     resolver: yupResolver(schema),
+  });
+
+  const { 
+    control: passControl, 
+    handleSubmit: handlePassSubmit, 
+    reset: resetPass 
+  } = useForm({
+    defaultValues: { newPassword: '', confirmPassword: '' },
+    resolver: yupResolver(passwordSchema)
   });
 
   const handleSave = (data: any) => {
@@ -71,7 +97,16 @@ export default function UserDetails({ navigation }: any) {
       });
     }
     setIsEditing(false);
-    setSuccessVisible(true); // Custom success modal
+    setSuccessVisible(true);
+  };
+
+  const handlePasswordChange = (data: any) => {
+    // Mock password update
+    setPasswordModalVisible(false);
+    resetPass();
+    setTimeout(() => {
+      Alert.alert("Success", "Your password has been updated.");
+    }, 500);
   };
 
   const confirmLogout = () => {
@@ -108,6 +143,22 @@ export default function UserDetails({ navigation }: any) {
     </View>
   );
 
+  // Simple Inline Password Input
+  const SimplePassInput = ({ value, onChangeText, placeholder, autoFocus }: any) => (
+    <View style={{ marginBottom: 12 }}>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#777"
+        secureTextEntry={false} // Visible by default for safety per previous request
+        style={styles.simpleInput}
+        autoFocus={autoFocus}
+        autoCapitalize="none"
+      />
+    </View>
+  );
+
   return (
     <ScreenContainer scrollable>
       <DashboardHeader title="My Profile" showBack onBackPress={() => navigation.goBack()} userInitial={user?.firstName || 'U'} onMenuPress={() => {}} />
@@ -139,8 +190,17 @@ export default function UserDetails({ navigation }: any) {
                 <Controller control={control} name="ec1Name" render={({ field }) => <AppInput label="Name" {...field} onChangeText={field.onChange} />} />
                 <Controller control={control} name="ec1Phone" render={({ field }) => <AppInput label="Phone" keyboardType="phone-pad" {...field} onChangeText={field.onChange} />} />
               </Collapsible>
-              {/* Add Contact 2/3 similar to above if strict typing needed, omitted for brevity but they are in the form logic */}
               
+              <Collapsible title="Contact 2">
+                <Controller control={control} name="ec2Name" render={({ field }) => <AppInput label="Name" {...field} onChangeText={field.onChange} />} />
+                <Controller control={control} name="ec2Phone" render={({ field }) => <AppInput label="Phone" keyboardType="phone-pad" {...field} onChangeText={field.onChange} />} />
+              </Collapsible>
+
+              <Collapsible title="Contact 3">
+                <Controller control={control} name="ec3Name" render={({ field }) => <AppInput label="Name" {...field} onChangeText={field.onChange} />} />
+                <Controller control={control} name="ec3Phone" render={({ field }) => <AppInput label="Phone" keyboardType="phone-pad" {...field} onChangeText={field.onChange} />} />
+              </Collapsible>
+
               <View style={styles.editActions}>
                 <AppButton title="Cancel" onPress={() => { reset(); setIsEditing(false); }} variant="ghost" style={{ flex: 1, marginRight: 8 }} />
                 <AppButton title="Save Changes" onPress={handleSubmit(handleSave)} style={{ flex: 1, marginLeft: 8 }} />
@@ -163,6 +223,7 @@ export default function UserDetails({ navigation }: any) {
 
         {!isEditing && (
           <View style={{ marginTop: 24, width: '100%' }}>
+            <AppButton title="Change Password" onPress={() => setPasswordModalVisible(true)} variant="primary" style={{ marginBottom: 12, backgroundColor: '#1F241D', borderWidth: 1, borderColor: COLORS.accent }} />
             <AppButton title="Log Out" onPress={() => setLogoutVisible(true)} variant="ghost" />
             <AppButton title="Delete Account" onPress={() => setDeleteVisible(true)} variant="danger" style={{ marginTop: 12 }} />
           </View>
@@ -171,14 +232,43 @@ export default function UserDetails({ navigation }: any) {
         <View style={styles.footer}>
           <Ionicons name="business" size={24} color={COLORS.textSecondary} style={{ marginBottom: 8 }} />
           <Text style={styles.footerTitle}>All State Bail Bond Services</Text>
-          <Text style={styles.footerText}>1122 S Congress Ave Suite B</Text>
-          <Text style={styles.footerText}>West Palm Beach Florida 33406</Text>
-          <Text style={styles.footerText}>Tel: +1 (561)340-3314</Text>
-          <Text style={styles.footerText}>Landmark: Building with The Statue of Liberty 🗽</Text>
+          <Text style={styles.footerText}>0007 A Happy Suite Z</Text>
+          <Text style={styles.footerText}>North East City Pensilvania</Text>
+          <Text style={styles.footerText}>Tel: (561) 123-1234</Text>
+          <Text style={styles.footerText}>Landmark: “ Building with The Statue of Liberty 🗽</Text>
         </View>
       </KeyboardAvoidingView>
 
-      {/* Modals */}
+      {/* Change Password Modal */}
+      <Modal visible={passwordModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Change Password</Text>
+            <Text style={styles.modalSub}>Create a new secure password.</Text>
+
+            <Controller control={passControl} name="newPassword" render={({ field, fieldState }) => (
+              <>
+                <SimplePassInput placeholder="New Password (Min 6 chars)" value={field.value} onChangeText={field.onChange} autoFocus={true} />
+                {fieldState.error && <Text style={styles.err}>{fieldState.error.message}</Text>}
+              </>
+            )} />
+
+            <Controller control={passControl} name="confirmPassword" render={({ field, fieldState }) => (
+              <>
+                <SimplePassInput placeholder="Confirm New Password" value={field.value} onChangeText={field.onChange} />
+                {fieldState.error && <Text style={styles.err}>{fieldState.error.message}</Text>}
+              </>
+            )} />
+
+            <View style={{ marginTop: 12 }}>
+              <AppButton title="Update" onPress={handleSubmit(handlePasswordChange)} />
+              <AppButton title="Cancel" onPress={() => setPasswordModalVisible(false)} variant="ghost" />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Alerts */}
       <ConfirmationModal
         visible={logoutVisible}
         title="Log Out"
@@ -206,8 +296,9 @@ export default function UserDetails({ navigation }: any) {
         title="Profile Updated"
         message="Your details have been saved successfully."
         onConfirm={() => setSuccessVisible(false)}
-        onCancel={() => setSuccessVisible(false)} // Single button mode
+        onCancel={() => setSuccessVisible(false)}
         confirmText="OK"
+        cancelText=""
         variant="primary"
         icon="checkmark-circle-outline"
       />
@@ -236,4 +327,15 @@ const styles = StyleSheet.create({
   footer: { marginTop: 40, marginBottom: 40, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#1F241D', paddingTop: 24 },
   footerTitle: { color: COLORS.textPrimary, fontWeight: '700', marginBottom: 6 },
   footerText: { color: COLORS.textSecondary, fontSize: 13, textAlign: 'center', lineHeight: 18 },
+  
+  // Modal Styles
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalCard: { backgroundColor: '#141812', padding: 24, borderRadius: 24, width: '100%', maxWidth: 420, borderWidth: 1, borderColor: '#2A3028' },
+  modalTitle: { color: COLORS.textPrimary, fontSize: 22, fontWeight: 'bold', marginBottom: 4, textAlign: 'center' },
+  modalSub: { color: COLORS.textSecondary, fontSize: 14, marginBottom: 20, textAlign: 'center' },
+  simpleInput: {
+    backgroundColor: '#0C0E0B', height: LAYOUT.controlHeight, borderRadius: 12, borderWidth: 1, borderColor: '#2A3028',
+    paddingHorizontal: 12, color: COLORS.textPrimary, fontSize: 16
+  },
+  err: { color: COLORS.error, marginBottom: 10, fontSize: 12, marginTop: -8 }
 });

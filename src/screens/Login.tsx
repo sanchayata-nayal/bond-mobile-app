@@ -9,7 +9,6 @@ import {
   Platform,
   Modal,
   ScrollView,
-  TextInput, // Importing standard TextInput
 } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import AppInput from '../components/AppInput';
@@ -57,11 +56,6 @@ const forgotIdentitySchema = yup.object({
   agent: yup.string().required('Required'),
 }).required();
 
-// Simplified Schema: Single Password Field
-const forgotResetSchema = yup.object({
-  newPassword: yup.string().required('Required').matches(PASSWORD_REGEX, PASSWORD_ERROR),
-}).required();
-
 export default function Login({ navigation }: any) {
   /* --- LOGIN FORM --- */
   const { control, handleSubmit, formState } = useForm({
@@ -72,12 +66,11 @@ export default function Login({ navigation }: any) {
 
   /* --- STATE --- */
   const [forgotVisible, setForgotVisible] = useState(false);
-  const [resetStep, setResetStep] = useState<1 | 2>(1);
   const [alertConfig, setAlertConfig] = useState<{visible: boolean, title: string, message: string, type: 'success' | 'error'}>({
     visible: false, title: '', message: '', type: 'error'
   });
 
-  /* --- FORGOT FORMS --- */
+  /* --- FORGOT PASSWORD FORM --- */
   const { 
     control: identityControl, 
     handleSubmit: handleIdentitySubmit, 
@@ -86,17 +79,6 @@ export default function Login({ navigation }: any) {
   } = useForm({
     defaultValues: { email: '', phone: '', dob: '', agent: '' },
     resolver: yupResolver(forgotIdentitySchema),
-    mode: 'onChange',
-  });
-
-  const { 
-    control: resetControl, 
-    handleSubmit: handleResetSubmit, 
-    formState: resetState,
-    reset: resetFinal
-  } = useForm({
-    defaultValues: { newPassword: '' }, // Only one field now
-    resolver: yupResolver(forgotResetSchema),
     mode: 'onChange',
   });
 
@@ -115,6 +97,7 @@ export default function Login({ navigation }: any) {
   };
 
   const onVerifyIdentity = (data: any) => {
+    // Mock Verification
     const isValid = 
       (data.email.toLowerCase() === MOCK_USER.email || true) && 
       data.agent.trim().toLowerCase() === MOCK_USER.agent.toLowerCase() &&
@@ -122,28 +105,19 @@ export default function Login({ navigation }: any) {
       (data.phone === MOCK_USER.phone.replace('+1', '') || data.phone === '5615550100');
 
     if (isValid) {
-      resetFinal({ newPassword: '' }); // Clear previous state
-      setResetStep(2);
+      // SUCCESS: Log them in directly
+      setForgotVisible(false);
+      resetIdentity();
+      demoStore.setUser(MOCK_USER); // Log them in
+      navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] });
     } else {
       showAlert('Verification Failed', 'Details do not match our records.', 'error');
     }
   };
 
-  const onFinalizeReset = (data: any) => {
-    setForgotVisible(false);
-    setResetStep(1);
-    resetIdentity();
-    resetFinal();
-    setTimeout(() => {
-      showAlert('Success', 'Password updated successfully. Please login.', 'success');
-    }, 500);
-  };
-
   const closeForgot = () => {
     setForgotVisible(false);
-    setResetStep(1);
     resetIdentity();
-    resetFinal();
   };
 
   return (
@@ -210,78 +184,40 @@ export default function Login({ navigation }: any) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             
-            {resetStep === 1 ? (
-              /* STEP 1: VERIFY IDENTITY */
-              <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                <Text style={styles.modalTitle}>Recover Account</Text>
-                <Text style={styles.modalSub}>Enter your details to verify identity.</Text>
+            <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <Text style={styles.modalTitle}>Recover Account</Text>
+              <Text style={styles.modalSub}>Verify details to login securely.</Text>
 
-                <Controller control={identityControl} name="email" render={({ field, fieldState }) => (
-                  <AppInput label="Email" placeholder="Enter email" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
-                )} />
-                
-                <Controller control={identityControl} name="phone" render={({ field, fieldState }) => (
-                  <View style={{ marginBottom: 14 }}>
-                    <Text style={styles.label}>Phone Number</Text>
-                    <PhoneInput 
-                      value={field.value} 
-                      onChange={field.onChange} 
-                      countryCode="+1" 
-                      placeholder="1234567890"
-                      error={fieldState.error?.message}
-                    />
-                  </View>
-                )} />
-
-                <Controller control={identityControl} name="agent" render={({ field, fieldState }) => (
-                  <AppInput label="Agent Name" placeholder="Enter Agent Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
-                )} />
-
-                <Controller control={identityControl} name="dob" render={({ field, fieldState }) => (
-                  <DatePickerField label="Date of Birth" value={field.value} onChange={field.onChange} placeholder="MM/DD/YYYY" error={fieldState.error?.message} />
-                )} />
-
-                <View style={{ marginTop: 10 }}>
-                  <AppButton title="Verify Identity" onPress={handleIdentitySubmit(onVerifyIdentity)} disabled={!identityState.isValid} />
-                  <AppButton title="Cancel" onPress={closeForgot} variant="ghost" />
+              <Controller control={identityControl} name="email" render={({ field, fieldState }) => (
+                <AppInput label="Email" placeholder="Enter email" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+              )} />
+              
+              <Controller control={identityControl} name="phone" render={({ field, fieldState }) => (
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={styles.label}>Phone Number</Text>
+                  <PhoneInput 
+                    value={field.value} 
+                    onChange={field.onChange} 
+                    countryCode="+1" 
+                    placeholder="1234567890"
+                    error={fieldState.error?.message}
+                  />
                 </View>
-              </ScrollView>
-            ) : (
-              /* STEP 2: RESET (Standard TextInput) */
-              <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                <Text style={styles.modalTitle}>Set New Password</Text>
-                <Text style={styles.modalSub}>Identity verified. Enter your new password.</Text>
+              )} />
 
-                <Controller 
-                  control={resetControl} 
-                  name="newPassword" 
-                  render={({ field, fieldState }) => (
-                    <View style={{ marginBottom: 14 }}>
-                      <Text style={styles.label}>New Password</Text>
-                      <TextInput 
-                        value={field.value}
-                        onChangeText={field.onChange}
-                        placeholder="Min 6 chars (Alpha-numeric)"
-                        placeholderTextColor="#7A7A7A"
-                        secureTextEntry={false} // Visible by default to avoid confusion
-                        style={[
-                          styles.rawInput, 
-                          fieldState.error ? { borderColor: COLORS.error } : null
-                        ]}
-                        autoFocus={true}
-                        autoCapitalize="none"
-                      />
-                      {fieldState.error && <Text style={styles.err}>{fieldState.error.message}</Text>}
-                    </View>
-                  )} 
-                />
+              <Controller control={identityControl} name="agent" render={({ field, fieldState }) => (
+                <AppInput label="Agent Name" placeholder="Enter Agent Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+              )} />
 
-                <View style={{ marginTop: 10 }}>
-                  <AppButton title="Update Password" onPress={handleResetSubmit(onFinalizeReset)} disabled={!resetState.isValid} />
-                  <AppButton title="Cancel" onPress={closeForgot} variant="ghost" />
-                </View>
-              </ScrollView>
-            )}
+              <Controller control={identityControl} name="dob" render={({ field, fieldState }) => (
+                <DatePickerField label="Date of Birth" value={field.value} onChange={field.onChange} placeholder="MM/DD/YYYY" error={fieldState.error?.message} />
+              )} />
+
+              <View style={{ marginTop: 10 }}>
+                <AppButton title="Verify & Login" onPress={handleIdentitySubmit(onVerifyIdentity)} disabled={!identityState.isValid} />
+                <AppButton title="Cancel" onPress={closeForgot} variant="ghost" />
+              </View>
+            </ScrollView>
 
           </View>
         </View>
@@ -317,9 +253,7 @@ const styles = StyleSheet.create({
   footerText: { color: COLORS.textSecondary, fontSize: 14 },
   link: { color: COLORS.accent, fontWeight: 'bold', fontSize: 14 },
   label: { color: COLORS.textSecondary, marginBottom: 8, fontSize: 13 },
-  err: { color: COLORS.error, marginTop: 6, fontSize: 12 },
-
-  /* Modal Styles */
+  
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalCard: { 
     backgroundColor: '#141812', padding: 24, borderRadius: 24, width: '100%', maxWidth: 420, 
@@ -327,17 +261,4 @@ const styles = StyleSheet.create({
   },
   modalTitle: { color: COLORS.textPrimary, fontSize: 22, fontWeight: 'bold', marginBottom: 4, textAlign: 'center' },
   modalSub: { color: COLORS.textSecondary, fontSize: 14, marginBottom: 20, textAlign: 'center' },
-
-  /* Raw Input Style (Fail-safe) */
-  rawInput: {
-    width: '100%',
-    height: LAYOUT.controlHeight,
-    backgroundColor: '#0C0E0B',
-    borderWidth: 1,
-    borderColor: '#2A3028',
-    borderRadius: LAYOUT.borderRadius,
-    paddingHorizontal: 12,
-    color: COLORS.textPrimary,
-    fontSize: 16,
-  }
 });
