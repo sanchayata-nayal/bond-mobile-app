@@ -19,7 +19,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import PhoneInput from '../components/PhoneInput';
 import { useForm, Controller } from 'react-hook-form';
 import { demoStore } from '../services/demoStore';
-import { COLORS } from '../styles/theme';
+import { COLORS, LAYOUT } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -40,7 +40,7 @@ const MOCK_USER = {
   ],
 };
 
-/* ---------- VALIDATION SCHEMAS ---------- */
+/* ---------- SCHEMAS ---------- */
 const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/;
 const PASSWORD_ERROR = 'Min 6 chars, letters & numbers required';
 
@@ -50,16 +50,16 @@ const loginSchema = yup.object({
 }).required();
 
 const forgotIdentitySchema = yup.object({
-  email: yup.string().email('Invalid email format').required('Required'),
-  phone: yup.string().required('Required').matches(/^\d{10}$/, '10 digits required'),
-  dob: yup.string().required('Required'),
-  agent: yup.string().required('Required'),
+  email: yup.string().email('Invalid email format').required('Email is required'),
+  phone: yup.string().required('Phone is required').matches(/^\d{10}$/, 'Must be exactly 10 digits'),
+  dob: yup.string().required('Date of Birth is required'),
+  agent: yup.string().required('Agent Name is required'),
 }).required();
 
 const forgotResetSchema = yup.object({
-  newPassword: yup.string().required('Required').matches(PASSWORD_REGEX, PASSWORD_ERROR),
+  newPassword: yup.string().required('Password is required').matches(PASSWORD_REGEX, PASSWORD_ERROR),
   confirmPassword: yup.string()
-    .required('Required')
+    .required('Confirmation is required')
     .oneOf([yup.ref('newPassword')], 'Passwords must match'),
 }).required();
 
@@ -78,7 +78,8 @@ export default function Login({ navigation }: any) {
     visible: false, title: '', message: '', type: 'error'
   });
 
-  /* --- FORGOT PASSWORD FORMS --- */
+  /* --- FORGOT FORMS --- */
+  // Step 1 Form
   const { 
     control: identityControl, 
     handleSubmit: handleIdentitySubmit, 
@@ -87,9 +88,10 @@ export default function Login({ navigation }: any) {
   } = useForm({
     defaultValues: { email: '', phone: '', dob: '', agent: '' },
     resolver: yupResolver(forgotIdentitySchema),
-    // Removed shouldUnregister: false (Fixes the frozen input issue)
+    mode: 'onChange', // Immediate validation feedback
   });
 
+  // Step 2 Form
   const { 
     control: resetControl, 
     handleSubmit: handleResetSubmit, 
@@ -98,7 +100,7 @@ export default function Login({ navigation }: any) {
   } = useForm({
     defaultValues: { newPassword: '', confirmPassword: '' },
     resolver: yupResolver(forgotResetSchema),
-    // Removed shouldUnregister: false
+    mode: 'onChange',
   });
 
   const showAlert = (title: string, message: string, type: 'success' | 'error') => {
@@ -116,7 +118,7 @@ export default function Login({ navigation }: any) {
   };
 
   const onVerifyIdentity = (data: any) => {
-    // Mock Verification
+    // Mock Identity Check
     const isValid = 
       (data.email.toLowerCase() === MOCK_USER.email || true) && 
       data.agent.trim().toLowerCase() === MOCK_USER.agent.toLowerCase() &&
@@ -124,6 +126,8 @@ export default function Login({ navigation }: any) {
       (data.phone === MOCK_USER.phone.replace('+1', '') || data.phone === '5615550100');
 
     if (isValid) {
+      // CRITICAL FIX: Reset the Step 2 form before showing it to ensure inputs are unlocked
+      resetFinal({ newPassword: '', confirmPassword: '' });
       setResetStep(2);
     } else {
       showAlert('Verification Failed', 'Details do not match our records.', 'error');
@@ -208,11 +212,14 @@ export default function Login({ navigation }: any) {
 
       {/* --- FORGOT PASSWORD MODAL --- */}
       <Modal visible={forgotVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalCard}>
             
             {resetStep === 1 ? (
-              /* STEP 1: VERIFY */
+              /* STEP 1: VERIFY IDENTITY */
               <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <Text style={styles.modalTitle}>Recover Account</Text>
                 <Text style={styles.modalSub}>Enter your details to verify identity.</Text>
@@ -248,7 +255,7 @@ export default function Login({ navigation }: any) {
                 </View>
               </ScrollView>
             ) : (
-              /* STEP 2: RESET */
+              /* STEP 2: RESET PASSWORD */
               <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <Text style={styles.modalTitle}>Set New Password</Text>
                 <Text style={styles.modalSub}>Identity verified. Create a new password.</Text>
@@ -260,7 +267,7 @@ export default function Login({ navigation }: any) {
                     value={field.value} 
                     onChangeText={field.onChange} 
                     error={fieldState.error?.message}
-                    autoFocus={true} // Focuses immediately so you can type
+                    autoFocus={true} 
                   />
                 )} />
 
@@ -282,7 +289,7 @@ export default function Login({ navigation }: any) {
             )}
 
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* CUSTOM ALERT */}
