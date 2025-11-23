@@ -9,11 +9,11 @@ import {
   Platform,
   Modal,
   ScrollView,
-  TextInput,
+  TextInput, // Importing standard TextInput
 } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import AppInput from '../components/AppInput';
-import PasswordInput from '../components/PasswordInput'; // Used for main login only
+import PasswordInput from '../components/PasswordInput';
 import AppButton from '../components/AppButton';
 import DatePickerField from '../components/DatePickerField';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -57,38 +57,10 @@ const forgotIdentitySchema = yup.object({
   agent: yup.string().required('Required'),
 }).required();
 
+// Simplified Schema: Single Password Field
 const forgotResetSchema = yup.object({
   newPassword: yup.string().required('Required').matches(PASSWORD_REGEX, PASSWORD_ERROR),
-  confirmPassword: yup.string()
-    .required('Required')
-    .oneOf([yup.ref('newPassword')], 'Passwords must match'),
 }).required();
-
-/* ---------- SIMPLE LOCAL INPUT (FAILSAFE) ---------- */
-// A raw implementation to guarantee typing works in the modal
-const SimpleResetInput = ({ value, onChangeText, placeholder, error, autoFocus }: any) => {
-  const [show, setShow] = useState(false);
-  return (
-    <View style={{ marginBottom: 14 }}>
-      <View style={[styles.simpleWrapper, error ? { borderColor: COLORS.error } : null]}>
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor="#7A7A7A"
-          secureTextEntry={!show}
-          style={styles.simpleInput}
-          autoCapitalize="none"
-          autoFocus={autoFocus}
-        />
-        <TouchableOpacity onPress={() => setShow(!show)} style={{ padding: 10 }}>
-          <Ionicons name={show ? 'eye-off' : 'eye'} size={20} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-      </View>
-      {error ? <Text style={styles.err}>{error}</Text> : null}
-    </View>
-  );
-};
 
 export default function Login({ navigation }: any) {
   /* --- LOGIN FORM --- */
@@ -123,7 +95,7 @@ export default function Login({ navigation }: any) {
     formState: resetState,
     reset: resetFinal
   } = useForm({
-    defaultValues: { newPassword: '', confirmPassword: '' },
+    defaultValues: { newPassword: '' }, // Only one field now
     resolver: yupResolver(forgotResetSchema),
     mode: 'onChange',
   });
@@ -150,8 +122,7 @@ export default function Login({ navigation }: any) {
       (data.phone === MOCK_USER.phone.replace('+1', '') || data.phone === '5615550100');
 
     if (isValid) {
-      // Clear previous values to ensure clean state
-      resetFinal({ newPassword: '', confirmPassword: '' });
+      resetFinal({ newPassword: '' }); // Clear previous state
       setResetStep(2);
     } else {
       showAlert('Verification Failed', 'Details do not match our records.', 'error');
@@ -240,6 +211,7 @@ export default function Login({ navigation }: any) {
           <View style={styles.modalCard}>
             
             {resetStep === 1 ? (
+              /* STEP 1: VERIFY IDENTITY */
               <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <Text style={styles.modalTitle}>Recover Account</Text>
                 <Text style={styles.modalSub}>Enter your details to verify identity.</Text>
@@ -275,29 +247,34 @@ export default function Login({ navigation }: any) {
                 </View>
               </ScrollView>
             ) : (
-              /* STEP 2: RESET (Using SimpleResetInput) */
+              /* STEP 2: RESET (Standard TextInput) */
               <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <Text style={styles.modalTitle}>Set New Password</Text>
-                <Text style={styles.modalSub}>Identity verified. Create a new password.</Text>
+                <Text style={styles.modalSub}>Identity verified. Enter your new password.</Text>
 
-                <Controller control={resetControl} name="newPassword" render={({ field, fieldState }) => (
-                  <SimpleResetInput 
-                    placeholder="Min 6 chars (Alpha-numeric)" 
-                    value={field.value} 
-                    onChangeText={field.onChange} 
-                    error={fieldState.error?.message}
-                    autoFocus={true}
-                  />
-                )} />
-
-                <Controller control={resetControl} name="confirmPassword" render={({ field, fieldState }) => (
-                  <SimpleResetInput 
-                    placeholder="Re-enter new password" 
-                    value={field.value} 
-                    onChangeText={field.onChange} 
-                    error={fieldState.error?.message}
-                  />
-                )} />
+                <Controller 
+                  control={resetControl} 
+                  name="newPassword" 
+                  render={({ field, fieldState }) => (
+                    <View style={{ marginBottom: 14 }}>
+                      <Text style={styles.label}>New Password</Text>
+                      <TextInput 
+                        value={field.value}
+                        onChangeText={field.onChange}
+                        placeholder="Min 6 chars (Alpha-numeric)"
+                        placeholderTextColor="#7A7A7A"
+                        secureTextEntry={false} // Visible by default to avoid confusion
+                        style={[
+                          styles.rawInput, 
+                          fieldState.error ? { borderColor: COLORS.error } : null
+                        ]}
+                        autoFocus={true}
+                        autoCapitalize="none"
+                      />
+                      {fieldState.error && <Text style={styles.err}>{fieldState.error.message}</Text>}
+                    </View>
+                  )} 
+                />
 
                 <View style={{ marginTop: 10 }}>
                   <AppButton title="Update Password" onPress={handleResetSubmit(onFinalizeReset)} disabled={!resetState.isValid} />
@@ -340,7 +317,9 @@ const styles = StyleSheet.create({
   footerText: { color: COLORS.textSecondary, fontSize: 14 },
   link: { color: COLORS.accent, fontWeight: 'bold', fontSize: 14 },
   label: { color: COLORS.textSecondary, marginBottom: 8, fontSize: 13 },
-  
+  err: { color: COLORS.error, marginTop: 6, fontSize: 12 },
+
+  /* Modal Styles */
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalCard: { 
     backgroundColor: '#141812', padding: 24, borderRadius: 24, width: '100%', maxWidth: 420, 
@@ -349,11 +328,16 @@ const styles = StyleSheet.create({
   modalTitle: { color: COLORS.textPrimary, fontSize: 22, fontWeight: 'bold', marginBottom: 4, textAlign: 'center' },
   modalSub: { color: COLORS.textSecondary, fontSize: 14, marginBottom: 20, textAlign: 'center' },
 
-  /* Simple Input Styles */
-  simpleWrapper: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0C0E0B', 
-    borderRadius: LAYOUT.borderRadius, borderWidth: 1, borderColor: '#2A3028', height: LAYOUT.controlHeight 
-  },
-  simpleInput: { flex: 1, color: COLORS.textPrimary, paddingHorizontal: 12, fontSize: 16, height: '100%' },
-  err: { color: COLORS.error, marginTop: 6, fontSize: 12 },
+  /* Raw Input Style (Fail-safe) */
+  rawInput: {
+    width: '100%',
+    height: LAYOUT.controlHeight,
+    backgroundColor: '#0C0E0B',
+    borderWidth: 1,
+    borderColor: '#2A3028',
+    borderRadius: LAYOUT.borderRadius,
+    paddingHorizontal: 12,
+    color: COLORS.textPrimary,
+    fontSize: 16,
+  }
 });
