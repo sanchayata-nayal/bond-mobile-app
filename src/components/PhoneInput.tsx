@@ -1,27 +1,57 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+// src/components/PhoneInput.tsx
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, TextInput, StyleSheet, ScrollView, Platform } from 'react-native';
 import { COLORS, LAYOUT } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 type Props = {
   value?: string;
   onChange: (val: string) => void;
-  countryCode?: string;
+  countryCode?: string; // e.g. +1
   onCountryChange?: (code: string) => void;
   placeholder?: string;
   error?: string | null;
   maxLength?: number;
 };
 
-const COMMON = [
-  { label: 'United States', code: '+1' },
-  { label: 'Canada', code: '+1' },
-  { label: 'United Kingdom', code: '+44' },
-  { label: 'Australia', code: '+61' },
+const COMMON_COUNTRIES = [
+  { label: 'United States', code: '+1', flag: '🇺🇸' },
+  { label: 'Canada', code: '+1', flag: '🇨🇦' },
+  { label: 'United Kingdom', code: '+44', flag: '🇬🇧' },
+  { label: 'Australia', code: '+61', flag: '🇦🇺' },
+  { label: 'India', code: '+91', flag: '🇮🇳' },
+  { label: 'Germany', code: '+49', flag: '🇩🇪' },
 ];
 
-export default function PhoneInput({ value = '', onChange, countryCode = '+1', onCountryChange, placeholder, error, maxLength = 10 }: Props) {
+export default function PhoneInput({ 
+  value = '', 
+  onChange, 
+  countryCode = '+1', 
+  onCountryChange, 
+  placeholder, 
+  error, 
+  maxLength = 10 
+}: Props) {
   const [openCountries, setOpenCountries] = useState(false);
+  
+  // Track the full country object locally to distinguish between countries with same code (e.g., US vs CA)
+  const [selectedCountry, setSelectedCountry] = useState(
+    COMMON_COUNTRIES.find(c => c.code === countryCode) || COMMON_COUNTRIES[0]
+  );
+
+  // Sync local state if parent updates countryCode prop from outside
+  useEffect(() => {
+    if (countryCode !== selectedCountry.code) {
+      const match = COMMON_COUNTRIES.find(c => c.code === countryCode);
+      if (match) setSelectedCountry(match);
+    }
+  }, [countryCode]);
+
+  const handleSelect = (country: typeof COMMON_COUNTRIES[0]) => {
+    setSelectedCountry(country);
+    onCountryChange?.(country.code);
+    setOpenCountries(false);
+  };
 
   function setNum(v: string) {
     const digits = v.replace(/\D/g, '').slice(0, maxLength);
@@ -29,35 +59,51 @@ export default function PhoneInput({ value = '', onChange, countryCode = '+1', o
   }
 
   return (
-    <View style={{ marginBottom: 14 }}>
-      <Text style={styles.label}>{placeholder || 'Phone number'}</Text>
-
-      <View style={styles.row}>
-        <TouchableOpacity style={styles.code} onPress={() => setOpenCountries(s => !s)}>
-          <Text style={{ color: COLORS.textPrimary, fontWeight: '700' }}>{countryCode}</Text>
-          <Ionicons name={openCountries ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textSecondary} style={{ marginLeft: 8 }} />
+    <View style={{ marginBottom: 14, zIndex: openCountries ? 100 : 1 }}>
+      <View style={[styles.row, error ? { borderColor: COLORS.error } : null]}>
+        {/* Country Code Selector */}
+        <TouchableOpacity 
+          style={styles.codeBtn} 
+          onPress={() => setOpenCountries(s => !s)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.flag}>{selectedCountry.flag}</Text>
+          <Text style={styles.codeText}>{selectedCountry.code}</Text>
+          <Ionicons name={openCountries ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textSecondary} style={{ marginLeft: 4 }} />
         </TouchableOpacity>
 
+        {/* Divider */}
+        <View style={styles.vertDivider} />
+
+        {/* Input */}
         <TextInput
           keyboardType="phone-pad"
           value={value}
           onChangeText={setNum}
-          placeholder="1234567890"
+          placeholder={placeholder || "Phone number"}
           placeholderTextColor="#7A7A7A"
           style={styles.input}
         />
       </View>
 
-      {openCountries ? (
-        <View style={styles.countryList}>
-          {COMMON.map(c => (
-            <TouchableOpacity key={c.code} style={styles.countryRow} onPress={() => { onCountryChange?.(c.code); setOpenCountries(false); }}>
-              <Text style={{ color: COLORS.textPrimary }}>{c.label}</Text>
-              <Text style={{ color: COLORS.textSecondary }}>{c.code}</Text>
-            </TouchableOpacity>
-          ))}
+      {/* Dropdown */}
+      {openCountries && (
+        <View style={styles.dropdown}>
+          <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+            {COMMON_COUNTRIES.map((c) => (
+              <TouchableOpacity 
+                key={c.label} 
+                style={[styles.countryRow, c.label === selectedCountry.label && { backgroundColor: 'rgba(255,255,255,0.05)' }]} 
+                onPress={() => handleSelect(c)}
+              >
+                <Text style={{ marginRight: 12, fontSize: 20 }}>{c.flag}</Text>
+                <Text style={{ color: COLORS.textPrimary, flex: 1, fontSize: 15 }}>{c.label}</Text>
+                <Text style={{ color: COLORS.accent, fontWeight: '700' }}>{c.code}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
-      ) : null}
+      )}
 
       {error ? <Text style={styles.err}>{error}</Text> : null}
     </View>
@@ -65,11 +111,53 @@ export default function PhoneInput({ value = '', onChange, countryCode = '+1', o
 }
 
 const styles = StyleSheet.create({
-  label: { color: COLORS.textSecondary, marginBottom: 8, fontSize: 13 },
-  row: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0C0E0B', borderRadius: LAYOUT.borderRadius, overflow: 'hidden', height: LAYOUT.controlHeight, borderWidth: 1, borderColor: 'transparent' },
-  code: { paddingHorizontal: 12, height: '100%', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', borderRightWidth: 1, borderRightColor: '#0A0A0A' },
-  input: { flex: 1, height: '100%', paddingHorizontal: 12, color: COLORS.textPrimary, fontSize: 16 },
-  countryList: { marginTop: 8, backgroundColor: '#0B0B0B', borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#0A0A0A' },
-  countryRow: { padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  row: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#0C0E0B', 
+    borderRadius: LAYOUT.borderRadius, 
+    height: LAYOUT.controlHeight, 
+    borderWidth: 1, 
+    borderColor: 'transparent' 
+  },
+  codeBtn: { 
+    paddingHorizontal: 12, 
+    height: '100%', 
+    flexDirection: 'row', 
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  flag: { fontSize: 18, marginRight: 6 },
+  codeText: { color: COLORS.textPrimary, fontWeight: '700', fontSize: 15 },
+  vertDivider: { width: 1, height: '60%', backgroundColor: '#2A3028' },
+  input: { 
+    flex: 1, 
+    height: '100%', 
+    paddingHorizontal: 12, 
+    color: COLORS.textPrimary, 
+    fontSize: 16 
+  },
+  dropdown: { 
+    position: 'absolute', 
+    top: LAYOUT.controlHeight + 4, 
+    left: 0, right: 0, 
+    backgroundColor: '#141812', 
+    borderRadius: 10, 
+    borderWidth: 1, 
+    borderColor: '#2A3028', 
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 10,
+    overflow: 'hidden'
+  },
+  countryRow: { 
+    padding: 14, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#1F241D' 
+  },
   err: { color: COLORS.error, marginTop: 6, fontSize: 12 },
 });
