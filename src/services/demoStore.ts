@@ -10,11 +10,11 @@ export type User = {
   agent?: string;
   email?: string;
   emergencyContacts?: EmergencyContact[];
-  joinedDate?: string; // for metrics
-  panicCount?: number; // for metrics
+  joinedDate?: string; 
+  panicCount?: number;
 };
 
-// Mock Data for Admin View
+// Mock Data
 const MOCK_DB_USERS: User[] = [
   { id: 'u1', firstName: 'John', lastName: 'Doe', email: 'john@example.com', phone: '+15610000001', agent: 'Agent Smith', joinedDate: '2025-02-10', panicCount: 2 },
   { id: 'u2', firstName: 'Alice', lastName: 'Wonder', email: 'alice@example.com', phone: '+15610000002', agent: 'Agent Carter', joinedDate: '2025-02-15', panicCount: 0 },
@@ -42,7 +42,6 @@ export const demoStore = {
 
   // --- ADMIN API SIMULATION ---
 
-  // 1. Recipients
   getRecipients() { return { primary: _primaryAgentNumber, list: _smsRecipients }; },
   updatePrimaryNumber(num: string) { _primaryAgentNumber = num; },
   addRecipient(name: string, phone: string) {
@@ -52,24 +51,33 @@ export const demoStore = {
     _smsRecipients = _smsRecipients.filter(r => r.id !== id);
   },
 
-  // 2. Users
+  // User Management
   getAllUsers() { return [...MOCK_DB_USERS]; },
+  
   deleteUser(id: string) {
     const idx = MOCK_DB_USERS.findIndex(u => u.id === id);
     if (idx > -1) MOCK_DB_USERS.splice(idx, 1);
   },
 
-  // 3. Metrics (Simulate fetching from Firebase Analytics)
+  updateUser(updatedUser: User) {
+    // 1. Update in DB list
+    const idx = MOCK_DB_USERS.findIndex(u => u.id === updatedUser.id);
+    if (idx > -1) {
+      MOCK_DB_USERS[idx] = updatedUser;
+    }
+    // 2. Update current session if it's the same user
+    if (_currentUser && _currentUser.id === updatedUser.id) {
+      _currentUser = updatedUser;
+    }
+  },
+
   async fetchMetrics(period: '7d' | '30d' | 'all') {
-    // Simulate network delay
     await new Promise(r => setTimeout(r, 600)); 
-    
     let data;
     if (period === '7d') data = MOCK_METRICS.last7Days;
     else if (period === '30d') data = MOCK_METRICS.lastMonth;
     else data = MOCK_METRICS.allTime;
 
-    // Sort users by panic count for "Top Active" table
     const topUsers = MOCK_DB_USERS
       .sort((a, b) => (b.panicCount || 0) - (a.panicCount || 0))
       .slice(0, 5);

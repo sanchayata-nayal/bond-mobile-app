@@ -1,16 +1,18 @@
 // src/screens/UserDetails.tsx
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  Alert, 
+  KeyboardAvoidingView, 
+  Platform, 
   TouchableOpacity,
   Modal,
-  TextInput
+  TextInput,
+  ToastAndroid
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import ScreenContainer from '../components/ScreenContainer';
 import DashboardHeader from '../components/DashboardHeader';
 import AppInput from '../components/AppInput';
@@ -18,75 +20,57 @@ import AppButton from '../components/AppButton';
 import DatePickerField from '../components/DatePickerField';
 import Collapsible from '../components/Collapsible';
 import ConfirmationModal from '../components/ConfirmationModal';
-import { demoStore } from '../services/demoStore';
+import { demoStore, User } from '../services/demoStore';
 import { COLORS, LAYOUT } from '../styles/theme';
 import { useForm, Controller } from 'react-hook-form';
-import * as yup from 'yup';
-import { yupResolver } from '@hookform/resolvers/yup';
 import { Ionicons } from '@expo/vector-icons';
 
-/* ---------- Schemas ---------- */
-const schema = yup.object({
-  firstName: yup.string().required('First name is required'),
-  lastName: yup.string(),
-  dob: yup.string().required('Date of birth required'),
-  phone: yup.string().required('Phone required').matches(/^\d{10}$/, '10 digits required'),
-  agent: yup.string().required('Agent required'),
-  ec1Name: yup.string().required('Contact 1 Name required'),
-  ec1Phone: yup.string().required('Contact 1 Phone required'),
-  ec2Name: yup.string().required('Contact 2 Name required'),
-  ec2Phone: yup.string().required('Contact 2 Phone required'),
-  ec3Name: yup.string().required('Contact 3 Name required'),
-  ec3Phone: yup.string().required('Contact 3 Phone required'),
-}).required();
+export default function UserDetails({ navigation, route }: any) {
+  // If route.params.user exists, we are in Admin View mode
+  const paramUser = route.params?.user as User | undefined;
+  const currentUser = demoStore.getUser();
+  
+  // Effective user to display (Admin param OR logged in user)
+  const displayUser = paramUser || currentUser;
+  const isAdminMode = !!paramUser; 
 
-const passwordSchema = yup.object({
-  newPassword: yup.string().required('Required').min(6, 'Min 6 chars').matches(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/, 'Alpha-numeric required'),
-  confirmPassword: yup.string().required('Required').oneOf([yup.ref('newPassword')], 'Passwords must match'),
-}).required();
-
-export default function UserDetails({ navigation }: any) {
-  const user = demoStore.getUser();
   const [isEditing, setIsEditing] = useState(false);
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
   const [successVisible, setSuccessVisible] = useState(false);
 
-  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
-
   const { control, handleSubmit, reset } = useForm({
     defaultValues: {
-      firstName: user?.firstName || '',
-      lastName: user?.lastName || '',
-      dob: user?.dob || '',
-      phone: user?.phone?.replace('+1', '') || '',
-      agent: user?.agent || '',
-      ec1Name: user?.emergencyContacts?.[0]?.name || '',
-      ec1Phone: user?.emergencyContacts?.[0]?.phone?.replace('+1', '') || '',
-      ec2Name: user?.emergencyContacts?.[1]?.name || '',
-      ec2Phone: user?.emergencyContacts?.[1]?.phone?.replace('+1', '') || '',
-      ec3Name: user?.emergencyContacts?.[2]?.name || '',
-      ec3Phone: user?.emergencyContacts?.[2]?.phone?.replace('+1', '') || '',
-    },
-    resolver: yupResolver(schema),
+      firstName: '', lastName: '', dob: '', phone: '', agent: '',
+      ec1Name: '', ec1Phone: '', ec2Name: '', ec2Phone: '', ec3Name: '', ec3Phone: '',
+    }
   });
 
-  const {
-    control: passControl,
-    handleSubmit: handlePassSubmit,
-    reset: resetPass
-  } = useForm({
-    defaultValues: { newPassword: '', confirmPassword: '' },
-    resolver: yupResolver(passwordSchema),
-    mode: 'onChange'
-  });
+  // Initialize Form Data
+  useEffect(() => {
+    if (displayUser) {
+      reset({
+        firstName: displayUser.firstName,
+        lastName: displayUser.lastName,
+        dob: displayUser.dob,
+        phone: displayUser.phone?.replace('+1', '') || '',
+        agent: displayUser.agent,
+        ec1Name: displayUser.emergencyContacts?.[0]?.name || '',
+        ec1Phone: displayUser.emergencyContacts?.[0]?.phone?.replace('+1', '') || '',
+        ec2Name: displayUser.emergencyContacts?.[1]?.name || '',
+        ec2Phone: displayUser.emergencyContacts?.[1]?.phone?.replace('+1', '') || '',
+        ec3Name: displayUser.emergencyContacts?.[2]?.name || '',
+        ec3Phone: displayUser.emergencyContacts?.[2]?.phone?.replace('+1', '') || '',
+      });
+    }
+  }, [displayUser]);
 
   const handleSave = (data: any) => {
-    if (user) {
-      demoStore.setUser({
-        ...user,
+    if (displayUser) {
+      const updatedUser: User = {
+        ...displayUser,
         firstName: data.firstName,
-        lastName: data.lastName || '',
+        lastName: data.lastName,
         dob: data.dob,
         phone: `+1${data.phone}`,
         agent: data.agent,
@@ -95,71 +79,60 @@ export default function UserDetails({ navigation }: any) {
           { name: data.ec2Name, phone: `+1${data.ec2Phone}` },
           { name: data.ec3Name, phone: `+1${data.ec3Phone}` },
         ]
-      });
+      };
+      
+      // Save to store (works for both Admin update and Self update)
+      demoStore.updateUser(updatedUser);
+      
+      setIsEditing(false);
+      setSuccessVisible(true);
     }
-    setIsEditing(false);
-    setSuccessVisible(true);
   };
 
-  const handlePasswordChange = (data: any) => {
-    setPasswordModalVisible(false);
-    resetPass();
-    setTimeout(() => {
-      Alert.alert("Success", "Your password has been updated.");
-    }, 500);
-  };
-
-  const confirmLogout = () => {
-    setLogoutVisible(false);
-    demoStore.clear();
-    navigation.reset({ index: 0, routes: [{ name: 'Starting' }] });
+  const handleCopyToClipboard = async (text: string) => {
+    await Clipboard.setStringAsync(text);
+    if (Platform.OS === 'android') {
+      ToastAndroid.show('Copied to clipboard', ToastAndroid.SHORT);
+    } else {
+      Alert.alert('Copied', text);
+    }
   };
 
   const confirmDelete = () => {
-    setDeleteVisible(false);
-    demoStore.clear();
-    navigation.reset({ index: 0, routes: [{ name: 'Starting' }] });
+    if (displayUser) {
+      demoStore.deleteUser(displayUser.id);
+      
+      if (isAdminMode) {
+        navigation.goBack(); // Go back to list
+      } else {
+        demoStore.clear();
+        navigation.reset({ index: 0, routes: [{ name: 'Starting' }] });
+      }
+    }
   };
 
-  const InfoRow = ({ label, value }: { label: string, value: string }) => (
+  const InfoRow = ({ label, value, copyable }: { label: string, value: string, copyable?: boolean }) => (
     <View style={styles.infoRow}>
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value}>{value || '-'}</Text>
-    </View>
-  );
-
-  const ContactCard = ({ contact, index }: { contact: any, index: number }) => (
-    <View style={styles.contactCard}>
-      <View style={styles.contactHeader}>
-        <View style={styles.contactBadge}>
-          <Text style={styles.contactBadgeText}>{index + 1}</Text>
-        </View>
-        <Text style={styles.contactName}>{contact.name}</Text>
-      </View>
-      <View style={styles.contactBody}>
-        <Ionicons name="call-outline" size={16} color={COLORS.textSecondary} style={{ marginRight: 8 }} />
-        <Text style={styles.contactPhone}>{contact.phone}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Text style={styles.value}>{value || '-'}</Text>
+        {copyable && value ? (
+          <TouchableOpacity onPress={() => handleCopyToClipboard(value)} style={{ marginLeft: 10 }}>
+            <Ionicons name="copy-outline" size={16} color={COLORS.accent} />
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
-  );
-
-  // Simple Inline Password Input (Refined)
-  const SimplePassInput = ({ value, onChangeText, placeholder, autoFocus }: any) => (
-    <TextInput
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={COLORS.textSecondary}
-      secureTextEntry={false}
-      style={styles.simpleInput}
-      autoFocus={autoFocus}
-      autoCapitalize="none"
-    />
   );
 
   return (
     <ScreenContainer scrollable>
-      <DashboardHeader title="My Profile" showBack onBackPress={() => navigation.goBack()} userInitial={user?.firstName || 'U'} onMenuPress={() => { }} />
+      <DashboardHeader 
+        title={isAdminMode ? "User Profile" : "My Profile"} 
+        showBack 
+        onBackPress={() => navigation.goBack()} 
+        userInitial={displayUser?.firstName || 'U'} 
+      />
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
         <View style={styles.card}>
@@ -167,33 +140,32 @@ export default function UserDetails({ navigation }: any) {
             <Text style={styles.sectionTitle}>Personal Details</Text>
             {!isEditing && (
               <TouchableOpacity onPress={() => setIsEditing(true)} activeOpacity={0.7}>
-                <Text style={styles.editLink}>Edit Profile</Text>
+                <Text style={styles.editLink}>Edit</Text>
               </TouchableOpacity>
             )}
           </View>
 
           {isEditing ? (
+            /* EDIT FORM */
             <View>
               <Controller control={control} name="firstName" render={({ field }) => <AppInput label="First Name" {...field} onChangeText={field.onChange} />} />
               <Controller control={control} name="lastName" render={({ field }) => <AppInput label="Last Name" {...field} onChangeText={field.onChange} />} />
               <Controller control={control} name="dob" render={({ field }) => <DatePickerField label="Date of Birth" value={field.value} onChange={field.onChange} />} />
               <Controller control={control} name="phone" render={({ field }) => <AppInput label="Phone" keyboardType="phone-pad" {...field} onChangeText={field.onChange} />} />
               <Controller control={control} name="agent" render={({ field }) => <AppInput label="Agent Name" {...field} onChangeText={field.onChange} />} />
-
+              
               <View style={styles.divider} />
-              <Text style={styles.sectionTitle}>Edit Contacts</Text>
+              <Text style={styles.sectionTitle}>Emergency Contacts</Text>
               <View style={{ height: 12 }} />
-
-              <Collapsible title="Contact 1" startOpen>
+              
+              <Collapsible title="Contact 1">
                 <Controller control={control} name="ec1Name" render={({ field }) => <AppInput label="Name" {...field} onChangeText={field.onChange} />} />
                 <Controller control={control} name="ec1Phone" render={({ field }) => <AppInput label="Phone" keyboardType="phone-pad" {...field} onChangeText={field.onChange} />} />
               </Collapsible>
-
               <Collapsible title="Contact 2">
                 <Controller control={control} name="ec2Name" render={({ field }) => <AppInput label="Name" {...field} onChangeText={field.onChange} />} />
                 <Controller control={control} name="ec2Phone" render={({ field }) => <AppInput label="Phone" keyboardType="phone-pad" {...field} onChangeText={field.onChange} />} />
               </Collapsible>
-
               <Collapsible title="Contact 3">
                 <Controller control={control} name="ec3Name" render={({ field }) => <AppInput label="Name" {...field} onChangeText={field.onChange} />} />
                 <Controller control={control} name="ec3Phone" render={({ field }) => <AppInput label="Phone" keyboardType="phone-pad" {...field} onChangeText={field.onChange} />} />
@@ -205,105 +177,90 @@ export default function UserDetails({ navigation }: any) {
               </View>
             </View>
           ) : (
+            /* READ ONLY VIEW */
             <View>
-              <InfoRow label="Name" value={`${user?.firstName} ${user?.lastName}`} />
-              <InfoRow label="Date of Birth" value={user?.dob || '-'} />
-              <InfoRow label="Phone" value={user?.phone || '-'} />
-              <InfoRow label="Agent" value={user?.agent || '-'} />
+              <InfoRow label="Name" value={`${displayUser?.firstName} ${displayUser?.lastName}`} />
+              <InfoRow label="Email" value={displayUser?.email || ''} copyable />
+              <InfoRow label="Phone" value={displayUser?.phone || ''} copyable />
+              <InfoRow label="Date of Birth" value={displayUser?.dob || '-'} />
+              <InfoRow label="Agent" value={displayUser?.agent || '-'} />
+
               <View style={styles.divider} />
               <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>Emergency Contacts</Text>
-              {(user?.emergencyContacts || []).map((c: any, i: number) => (
-                <ContactCard key={i} contact={c} index={i} />
+              
+              {(displayUser?.emergencyContacts || []).map((c: any, i: number) => (
+                <View key={i} style={styles.contactCard}>
+                  <View style={styles.contactHeader}>
+                    <View style={styles.contactBadge}>
+                      <Text style={styles.contactBadgeText}>{i + 1}</Text>
+                    </View>
+                    <Text style={styles.contactName}>{c.name}</Text>
+                  </View>
+                  <View style={styles.contactBody}>
+                    <Text style={styles.contactPhone}>{c.phone}</Text>
+                    {c.phone ? (
+                      <TouchableOpacity onPress={() => handleCopyToClipboard(c.phone)} style={{ marginLeft: 10 }}>
+                        <Ionicons name="copy-outline" size={14} color={COLORS.textSecondary} />
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                </View>
               ))}
             </View>
           )}
         </View>
 
-        {!isEditing && (
-          <View style={{ marginTop: 24, width: '100%' }}>
-            <AppButton
-              title="Change Password"
-              onPress={() => setPasswordModalVisible(true)}
-              variant="ghost" // Corrected for visibility (White Text)
-              style={{ marginBottom: 12, backgroundColor: '#1F241D', borderWidth: 1, borderColor: COLORS.accent }}
-            />
-            <AppButton title="Log Out" onPress={() => setLogoutVisible(true)} variant="ghost" />
-            <AppButton title="Delete Account" onPress={() => setDeleteVisible(true)} variant="danger" style={{ marginTop: 12 }} />
+        {/* Footer Actions */}
+        <View style={{ marginTop: 24, width: '100%' }}>
+          {!isAdminMode && !isEditing && (
+            <>
+              <AppButton title="Log Out" onPress={() => setLogoutVisible(true)} variant="ghost" />
+              <AppButton title="Delete Account" onPress={() => setDeleteVisible(true)} variant="danger" style={{ marginTop: 12 }} />
+            </>
+          )}
+          
+          {isAdminMode && !isEditing && (
+            <AppButton title="Delete User" onPress={() => setDeleteVisible(true)} variant="danger" />
+          )}
+        </View>
+
+        {!isAdminMode && (
+          <View style={styles.footer}>
+            <Text style={styles.footerTitle}>All State Bail Bond Services</Text>
+            <Text style={styles.footerText}>0007 A Happy Suite Z, North East City</Text>
           </View>
         )}
-
-        <View style={styles.footer}>
-          <Ionicons name="business" size={24} color={COLORS.textSecondary} style={{ marginBottom: 8 }} />
-          <Text style={styles.footerTitle}>All State Bail Bond Services</Text>
-          <Text style={styles.footerText}>1122 S Congress Ave Suite B</Text>
-          <Text style={styles.footerText}>West Palm Beach Florida 33406</Text>
-          <Text style={styles.footerText}>Tel: +1(561)340-3314</Text>
-          <Text style={styles.footerText}>Landmark: Building with The Statue of Liberty 🗽</Text>
-        </View>
       </KeyboardAvoidingView>
 
-      {/* Change Password Modal */}
-      <Modal visible={passwordModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Change Password</Text>
-            <Text style={styles.modalSub}>Create a new secure password.</Text>
-
-            <Controller control={passControl} name="newPassword" render={({ field, fieldState }) => (
-              <View style={{ width: '100%', marginBottom: 12 }}>
-                <SimplePassInput placeholder="New Password (Min 6 chars)" value={field.value} onChangeText={field.onChange} autoFocus={true} />
-                {fieldState.error && <Text style={styles.err}>{fieldState.error.message}</Text>}
-              </View>
-            )} />
-
-            <Controller control={passControl} name="confirmPassword" render={({ field, fieldState }) => (
-              <View style={{ width: '100%', marginBottom: 12 }}>
-                <SimplePassInput placeholder="Confirm New Password" value={field.value} onChangeText={field.onChange} />
-                {fieldState.error && <Text style={styles.err}>{fieldState.error.message}</Text>}
-              </View>
-            )} />
-
-            <View style={{ marginTop: 12, width: '100%' }}>
-              <AppButton title="Update" onPress={handleSubmit(handlePasswordChange)} />
-              <AppButton title="Cancel" onPress={() => setPasswordModalVisible(false)} variant="ghost" />
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Alerts */}
+      {/* Modals */}
       <ConfirmationModal
         visible={logoutVisible}
         title="Log Out"
-        message="Are you sure you want to log out?"
-        onConfirm={confirmLogout}
+        message="Are you sure?"
+        onConfirm={() => { setLogoutVisible(false); demoStore.clear(); navigation.reset({ index: 0, routes: [{ name: 'Starting' }] }); }}
         onCancel={() => setLogoutVisible(false)}
         confirmText="Log Out"
         variant="danger"
-        icon="log-out-outline"
       />
 
       <ConfirmationModal
         visible={deleteVisible}
-        title="Delete Account"
-        message="This action is permanent. You will lose all emergency contact data and access to the service. Are you sure?"
+        title={isAdminMode ? "Delete User" : "Delete Account"}
+        message="This action is permanent. Are you sure?"
         onConfirm={confirmDelete}
         onCancel={() => setDeleteVisible(false)}
-        confirmText="Delete Forever"
+        confirmText="Delete"
         variant="danger"
-        icon="trash-outline"
       />
 
       <ConfirmationModal
         visible={successVisible}
-        title="Profile Updated"
-        message="Your details have been saved successfully."
+        title="Success"
+        message="Profile updated successfully."
         onConfirm={() => setSuccessVisible(false)}
         onCancel={() => setSuccessVisible(false)}
         confirmText="OK"
         cancelText=""
-        variant="primary"
-        icon="checkmark-circle-outline"
       />
 
     </ScreenContainer>
@@ -329,23 +286,5 @@ const styles = StyleSheet.create({
   contactPhone: { color: COLORS.textSecondary, fontSize: 14 },
   footer: { marginTop: 40, marginBottom: 40, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#1F241D', paddingTop: 24 },
   footerTitle: { color: COLORS.textPrimary, fontWeight: '700', marginBottom: 6 },
-  footerText: { color: COLORS.textSecondary, fontSize: 13, textAlign: 'center', lineHeight: 18 },
-
-  // Modal Styles
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalCard: { backgroundColor: '#141812', padding: 24, borderRadius: 24, width: '100%', maxWidth: 420, borderWidth: 1, borderColor: '#2A3028', alignItems: 'center' },
-  modalTitle: { color: COLORS.textPrimary, fontSize: 22, fontWeight: 'bold', marginBottom: 4, textAlign: 'center' },
-  modalSub: { color: COLORS.textSecondary, fontSize: 14, marginBottom: 20, textAlign: 'center' },
-  simpleInput: {
-    width: '100%',
-    height: LAYOUT.controlHeight,
-    backgroundColor: '#0C0E0B',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#2A3028',
-    paddingHorizontal: 12,
-    color: COLORS.textPrimary,
-    fontSize: 16
-  },
-  err: { color: COLORS.error, fontSize: 12, marginTop: 4, marginLeft: 4 }
+  footerText: { color: COLORS.textSecondary, fontSize: 13, textAlign: 'center' },
 });
