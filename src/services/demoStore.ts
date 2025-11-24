@@ -15,7 +15,6 @@ export type User = {
   panicCount?: number;
 };
 
-// New Type for the detailed log
 export type PanicLog = {
   id: string;
   userName: string;
@@ -32,15 +31,18 @@ const MOCK_DB_USERS: User[] = [
   { id: 'u2', firstName: 'Alice', lastName: 'Wonder', email: 'alice@example.com', phone: '+15610000002', agent: 'Agent Carter', joinedDate: '2025-02-15', panicCount: 0 },
   { id: 'u3', firstName: 'Bob', lastName: 'Builder', email: 'bob@example.com', phone: '+15610000003', agent: 'Agent Smith', joinedDate: '2025-02-20', panicCount: 5 },
   { id: 'u4', firstName: 'Charlie', lastName: 'Chaplin', email: 'charlie@example.com', phone: '+15610000004', agent: 'Agent Bond', joinedDate: '2025-02-22', panicCount: 1 },
+  { id: 'u5', firstName: 'David', lastName: 'Goggins', email: 'david@example.com', phone: '+15610000005', agent: 'Agent Smith', joinedDate: '2025-02-23', panicCount: 8 },
+  { id: 'u6', firstName: 'Eve', lastName: 'Polastri', email: 'eve@example.com', phone: '+15610000006', agent: 'Agent Carter', joinedDate: '2025-02-24', panicCount: 2 },
 ];
 
-// Simulated "Panic Events" Table from Firebase
 const MOCK_PANIC_LOGS: PanicLog[] = [
   { id: 'p1', userName: 'Bob Builder', userPhone: '+15610000003', agent: 'Agent Smith', timestamp: '2025-02-24T14:30:00Z' },
   { id: 'p2', userName: 'John Doe', userPhone: '+15610000001', agent: 'Agent Smith', timestamp: '2025-02-24T12:15:00Z' },
   { id: 'p3', userName: 'Bob Builder', userPhone: '+15610000003', agent: 'Agent Smith', timestamp: '2025-02-23T09:45:00Z' },
   { id: 'p4', userName: 'Charlie Chaplin', userPhone: '+15610000004', agent: 'Agent Bond', timestamp: '2025-02-22T18:20:00Z' },
   { id: 'p5', userName: 'Bob Builder', userPhone: '+15610000003', agent: 'Agent Smith', timestamp: '2025-02-21T22:10:00Z' },
+  { id: 'p6', userName: 'David Goggins', userPhone: '+15610000005', agent: 'Agent Smith', timestamp: '2025-02-25T08:00:00Z' },
+  { id: 'p7', userName: 'Eve Polastri', userPhone: '+15610000006', agent: 'Agent Carter', timestamp: '2025-02-25T09:15:00Z' },
 ];
 
 const MOCK_METRICS = {
@@ -60,8 +62,6 @@ export const demoStore = {
   setUser(u: User) { _currentUser = u; },
   getUser(): User | null { return _currentUser; },
   clear() { _currentUser = null; },
-
-  // --- ADMIN API SIMULATION ---
 
   getRecipients() { return { primary: _primaryAgentNumber, list: _smsRecipients }; },
   updatePrimaryNumber(num: string) { _primaryAgentNumber = num; },
@@ -85,23 +85,20 @@ export const demoStore = {
     if (_currentUser && _currentUser.id === updatedUser.id) _currentUser = updatedUser;
   },
 
-  // Enhanced Metrics Fetcher
   async fetchMetrics(period: '7d' | '30d' | 'all') {
-    await new Promise(r => setTimeout(r, 600)); // Simulate network latency
+    await new Promise(r => setTimeout(r, 400)); 
     
     let stats;
     if (period === '7d') stats = MOCK_METRICS.last7Days;
     else if (period === '30d') stats = MOCK_METRICS.lastMonth;
     else stats = MOCK_METRICS.allTime;
 
-    // 1. Top Active Users (Leaderboard)
+    // Return ALL users with panic count > 0, sorted descending
     const topUsers = MOCK_DB_USERS
       .filter(u => (u.panicCount || 0) > 0)
-      .sort((a, b) => (b.panicCount || 0) - (a.panicCount || 0))
-      .slice(0, 5);
+      .sort((a, b) => (b.panicCount || 0) - (a.panicCount || 0));
 
-    // 2. Recent Panic Logs (Timeline)
-    // In a real app, you would filter these by the 'period' date range
+    // In a real app, filter logs by date 'period' here
     const recentLogs = [...MOCK_PANIC_LOGS];
 
     return { ...stats, topUsers, recentLogs };

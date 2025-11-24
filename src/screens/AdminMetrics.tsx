@@ -1,20 +1,13 @@
 // src/screens/AdminMetrics.tsx
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, TextInput } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import DashboardHeader from '../components/DashboardHeader';
 import { demoStore, PanicLog, User } from '../services/demoStore';
 import { COLORS } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 
-/* --- SUB-COMPONENTS for Modularity --- */
-
-const SectionHeader = ({ title, icon }: { title: string, icon: any }) => (
-  <View style={styles.sectionHeader}>
-    <Ionicons name={icon} size={18} color={COLORS.accent} style={{ marginRight: 8 }} />
-    <Text style={styles.sectionTitle}>{title}</Text>
-  </View>
-);
+/* --- SUB-COMPONENTS --- */
 
 const MetricCard = ({ label, value, color }: { label: string, value: string | number, color: string }) => (
   <View style={[styles.metricCard, { borderLeftColor: color }]}>
@@ -39,10 +32,29 @@ const FilterTabs = ({ current, onChange }: { current: string, onChange: (v: any)
   </View>
 );
 
+const ViewSelector = ({ current, onChange }: { current: string, onChange: (v: 'alerts' | 'users') => void }) => (
+  <View style={styles.selectorContainer}>
+    <TouchableOpacity onPress={() => onChange('alerts')} style={[styles.selectorBtn, current === 'alerts' && styles.selectorActive]}>
+      <Text style={[styles.selectorText, current === 'alerts' && { color: '#000' }]}>Recent Alerts</Text>
+    </TouchableOpacity>
+    <TouchableOpacity onPress={() => onChange('users')} style={[styles.selectorBtn, current === 'users' && styles.selectorActive]}>
+      <Text style={[styles.selectorText, current === 'users' && { color: '#000' }]}>User Leaderboard</Text>
+    </TouchableOpacity>
+  </View>
+);
+
 const RecentLogItem = ({ item }: { item: PanicLog }) => {
-  const date = new Date(item.timestamp);
-  const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const dateStr = date.toLocaleDateString();
+  // Format: MM/DD/YYYY HH:mm (24h)
+  const dateObj = new Date(item.timestamp);
+  
+  const mm = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+  const dd = dateObj.getDate().toString().padStart(2, '0');
+  const yyyy = dateObj.getFullYear();
+  
+  const hh = dateObj.getHours().toString().padStart(2, '0');
+  const min = dateObj.getMinutes().toString().padStart(2, '0');
+
+  const formattedTime = `${mm}/${dd}/${yyyy} ${hh}:${min}`;
 
   return (
     <View style={styles.logRow}>
@@ -52,7 +64,7 @@ const RecentLogItem = ({ item }: { item: PanicLog }) => {
       <View style={{ flex: 1 }}>
         <View style={styles.logTop}>
           <Text style={styles.logName}>{item.userName}</Text>
-          <Text style={styles.logTime}>{dateStr} • {timeStr}</Text>
+          <Text style={styles.logTime}>{formattedTime}</Text>
         </View>
         <Text style={styles.logDetail}>Agent: {item.agent}</Text>
         <Text style={styles.logDetail}>{item.userPhone}</Text>
@@ -81,6 +93,7 @@ const TopUserRow = ({ user, rank }: { user: User, rank: number }) => (
 
 export default function AdminMetrics({ navigation }: any) {
   const [period, setPeriod] = useState<'7d'|'30d'|'all'>('7d');
+  const [activeView, setActiveView] = useState<'alerts' | 'users'>('alerts');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<{
     newSignups: number;
@@ -88,6 +101,9 @@ export default function AdminMetrics({ navigation }: any) {
     topUsers: User[];
     recentLogs: PanicLog[];
   } | null>(null);
+  
+  // Local Search State for Logs
+  const [logSearch, setLogSearch] = useState('');
 
   useEffect(() => {
     loadData();
@@ -99,6 +115,13 @@ export default function AdminMetrics({ navigation }: any) {
     setData(res);
     setLoading(false);
   };
+
+  // Filter Logs based on search
+  const filteredLogs = data?.recentLogs.filter(l => 
+    l.userName.toLowerCase().includes(logSearch.toLowerCase()) ||
+    l.agent.toLowerCase().includes(logSearch.toLowerCase()) ||
+    l.userPhone.includes(logSearch)
+  ) || [];
 
   return (
     <ScreenContainer scrollable>
@@ -113,35 +136,57 @@ export default function AdminMetrics({ navigation }: any) {
       ) : (
         <View style={{ width: '100%' }}>
           
-          {/* 1. High Level Stats */}
+          {/* High Level Stats */}
           <View style={styles.cardsRow}>
             <MetricCard label="New Signups" value={data.newSignups} color={COLORS.accent} />
             <View style={{ width: 12 }} />
             <MetricCard label="Active Users" value={data.activeUsers} color="#4A90E2" />
           </View>
 
-          {/* 2. Recent Panic Activity (The requested Table) */}
-          <SectionHeader title="Recent Panic Alerts" icon="list" />
-          <View style={styles.cardContainer}>
-            {data.recentLogs.length === 0 ? (
-              <Text style={styles.emptyText}>No alerts in this period.</Text>
-            ) : (
-              data.recentLogs.map((log) => (
-                <RecentLogItem key={log.id} item={log} />
-              ))
-            )}
-          </View>
+          {/* Toggle View */}
+          <ViewSelector current={activeView} onChange={setActiveView} />
 
-          {/* 3. Top Active Users (Leaderboard) */}
-          <SectionHeader title="Top Active Users" icon="trophy-outline" />
+          {/* Dynamic Content Area */}
           <View style={styles.cardContainer}>
-             {data.topUsers.length === 0 ? (
-               <Text style={styles.emptyText}>No active users.</Text>
-             ) : (
-               data.topUsers.map((u, i) => (
-                 <TopUserRow key={u.id} user={u} rank={i + 1} />
-               ))
-             )}
+            
+            {activeView === 'alerts' ? (
+              <>
+                {/* Search Bar for Alerts */}
+                <View style={styles.searchBar}>
+                  <Ionicons name="search" size={18} color={COLORS.textSecondary} />
+                  <TextInput 
+                    style={styles.searchInput} 
+                    placeholder="Search alerts..." 
+                    placeholderTextColor={COLORS.textSecondary}
+                    value={logSearch}
+                    onChangeText={setLogSearch}
+                  />
+                </View>
+
+                {/* Scrollable List of Logs */}
+                <ScrollView style={{ maxHeight: 400 }} nestedScrollEnabled>
+                  {filteredLogs.length === 0 ? (
+                    <Text style={styles.emptyText}>No alerts found.</Text>
+                  ) : (
+                    filteredLogs.map((log) => (
+                      <RecentLogItem key={log.id} item={log} />
+                    ))
+                  )}
+                </ScrollView>
+              </>
+            ) : (
+              /* User Leaderboard View */
+              <ScrollView style={{ maxHeight: 400 }} nestedScrollEnabled>
+                 {data.topUsers.length === 0 ? (
+                   <Text style={styles.emptyText}>No active users in this period.</Text>
+                 ) : (
+                   data.topUsers.map((u, i) => (
+                     <TopUserRow key={u.id} user={u} rank={i + 1} />
+                   ))
+                 )}
+              </ScrollView>
+            )}
+
           </View>
 
           <View style={{ height: 40 }} />
@@ -167,19 +212,29 @@ const styles = StyleSheet.create({
   metricValue: { color: COLORS.textPrimary, fontSize: 24, fontWeight: '900', marginBottom: 4 },
   metricLabel: { color: COLORS.textSecondary, fontSize: 12 },
 
-  /* Sections */
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginTop: 8, paddingLeft: 4 },
-  sectionTitle: { color: COLORS.textSecondary, fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
-  
-  cardContainer: { backgroundColor: '#141812', borderRadius: 16, padding: 4, overflow: 'hidden', marginBottom: 16 },
-  emptyText: { color: COLORS.textSecondary, textAlign: 'center', padding: 20, fontStyle: 'italic' },
+  /* View Selector */
+  selectorContainer: { flexDirection: 'row', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#2A3028' },
+  selectorBtn: { flex: 1, paddingVertical: 12, alignItems: 'center' },
+  selectorActive: { borderBottomWidth: 2, borderBottomColor: COLORS.accent },
+  selectorText: { color: COLORS.textSecondary, fontWeight: '700', fontSize: 14 },
+
+  /* Main Card Container */
+  cardContainer: { backgroundColor: '#141812', borderRadius: 16, padding: 4, overflow: 'hidden', minHeight: 200 },
+  emptyText: { color: COLORS.textSecondary, textAlign: 'center', padding: 20, fontStyle: 'italic', marginTop: 20 },
+
+  /* Search Bar */
+  searchBar: { 
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', 
+    borderRadius: 8, paddingHorizontal: 12, margin: 8, height: 40 
+  },
+  searchInput: { flex: 1, marginLeft: 8, color: COLORS.textPrimary, fontSize: 14 },
 
   /* Log Item */
   logRow: { flexDirection: 'row', padding: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', alignItems: 'flex-start' },
   logIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(214, 69, 69, 0.15)', alignItems: 'center', justifyContent: 'center', marginRight: 12, marginTop: 2 },
   logTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   logName: { color: COLORS.textPrimary, fontWeight: '700', fontSize: 15 },
-  logTime: { color: COLORS.textSecondary, fontSize: 12 },
+  logTime: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600' },
   logDetail: { color: COLORS.textSecondary, fontSize: 12.5, lineHeight: 18 },
 
   /* User Row */
