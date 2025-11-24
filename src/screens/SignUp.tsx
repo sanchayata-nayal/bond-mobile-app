@@ -19,7 +19,7 @@ import PasswordInput from '../components/PasswordInput';
 import DatePickerField from '../components/DatePickerField';
 import AppButton from '../components/AppButton';
 import Collapsible from '../components/Collapsible';
-import PhoneInput from '../components/PhoneInput'; // Using the smart component
+import PhoneInput from '../components/PhoneInput'; 
 import { useForm, Controller } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -48,7 +48,7 @@ const parseDate = (str: string) => {
 
 const schema = yup.object({
   firstName: yup.string().required('First name is required'),
-  lastName: yup.string().required('Last name is required'), 
+  lastName: yup.string().required('Last name is required'),
   dob: yup
     .string()
     .required('Date of birth required')
@@ -83,6 +83,28 @@ const schema = yup.object({
   ec3Name: yup.string().required('Contact 3 name required'),
   ec3Phone: yup.string().required('Contact 3 phone required').matches(/^\d{10}$/, 'Must be 10 digits'),
 }).required();
+
+/* FIX: Moved Component OUTSIDE of the main render function.
+   This prevents React from re-creating it on every keystroke (which closes keyboard).
+*/
+const PhoneField = ({ controlName, label, control, error }: any) => (
+  <View style={{ marginBottom: 2 }}>
+    {label && <Text style={styles.label}>{label}</Text>}
+    <Controller
+      control={control}
+      name={controlName}
+      render={({ field }) => (
+        <PhoneInput
+          value={field.value}
+          onChange={field.onChange}
+          countryCode="+1"
+          placeholder="5551234567"
+          error={error}
+        />
+      )}
+    />
+  </View>
+);
 
 export default function SignUp({ navigation }: any) {
   const { width } = useWindowDimensions();
@@ -136,26 +158,6 @@ export default function SignUp({ navigation }: any) {
     setShowDisclaimer(false);
     navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] });
   };
-
-  // Reusable Phone Component with Dropdown
-  const PhoneField = ({ controlName, label, control, error }: any) => (
-    <View style={{ marginBottom: 2 }}>
-      {label && <Text style={styles.label}>{label}</Text>}
-      <Controller
-        control={control}
-        name={controlName}
-        render={({ field }) => (
-          <PhoneInput
-            value={field.value}
-            onChange={field.onChange}
-            countryCode="+1"
-            placeholder="5551234567"
-            error={error}
-          />
-        )}
-      />
-    </View>
-  );
 
   return (
     <ScreenContainer scrollable>
@@ -288,7 +290,6 @@ export default function SignUp({ navigation }: any) {
   );
 }
 
-/*Styles*/
 const styles = StyleSheet.create({
   header: { width: '100%', marginBottom: 20, marginTop: 10, flexDirection: 'row', alignItems: 'center' },
   backBtn: { padding: 8, marginRight: 8, borderRadius: 999, backgroundColor: '#1A2018' },
