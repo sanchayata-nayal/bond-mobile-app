@@ -1,12 +1,12 @@
 // src/screens/UserDetails.tsx
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Alert, 
-  KeyboardAvoidingView, 
-  Platform, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
   TouchableOpacity,
   Modal,
   TextInput
@@ -51,7 +51,7 @@ export default function UserDetails({ navigation }: any) {
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
   const [successVisible, setSuccessVisible] = useState(false);
-  
+
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
 
   const { control, handleSubmit, reset } = useForm({
@@ -71,13 +71,14 @@ export default function UserDetails({ navigation }: any) {
     resolver: yupResolver(schema),
   });
 
-  const { 
-    control: passControl, 
-    handleSubmit: handlePassSubmit, 
-    reset: resetPass 
+  const {
+    control: passControl,
+    handleSubmit: handlePassSubmit,
+    reset: resetPass
   } = useForm({
     defaultValues: { newPassword: '', confirmPassword: '' },
-    resolver: yupResolver(passwordSchema)
+    resolver: yupResolver(passwordSchema),
+    mode: 'onChange'
   });
 
   const handleSave = (data: any) => {
@@ -101,7 +102,6 @@ export default function UserDetails({ navigation }: any) {
   };
 
   const handlePasswordChange = (data: any) => {
-    // Mock password update
     setPasswordModalVisible(false);
     resetPass();
     setTimeout(() => {
@@ -143,25 +143,23 @@ export default function UserDetails({ navigation }: any) {
     </View>
   );
 
-  // Simple Inline Password Input
+  // Simple Inline Password Input (Refined)
   const SimplePassInput = ({ value, onChangeText, placeholder, autoFocus }: any) => (
-    <View style={{ marginBottom: 12 }}>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor="#777"
-        secureTextEntry={false} // Visible by default for safety per previous request
-        style={styles.simpleInput}
-        autoFocus={autoFocus}
-        autoCapitalize="none"
-      />
-    </View>
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={COLORS.textSecondary}
+      secureTextEntry={false}
+      style={styles.simpleInput}
+      autoFocus={autoFocus}
+      autoCapitalize="none"
+    />
   );
 
   return (
     <ScreenContainer scrollable>
-      <DashboardHeader title="My Profile" showBack onBackPress={() => navigation.goBack()} userInitial={user?.firstName || 'U'} onMenuPress={() => {}} />
+      <DashboardHeader title="My Profile" showBack onBackPress={() => navigation.goBack()} userInitial={user?.firstName || 'U'} onMenuPress={() => { }} />
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
         <View style={styles.card}>
@@ -190,7 +188,7 @@ export default function UserDetails({ navigation }: any) {
                 <Controller control={control} name="ec1Name" render={({ field }) => <AppInput label="Name" {...field} onChangeText={field.onChange} />} />
                 <Controller control={control} name="ec1Phone" render={({ field }) => <AppInput label="Phone" keyboardType="phone-pad" {...field} onChangeText={field.onChange} />} />
               </Collapsible>
-              
+
               <Collapsible title="Contact 2">
                 <Controller control={control} name="ec2Name" render={({ field }) => <AppInput label="Name" {...field} onChangeText={field.onChange} />} />
                 <Controller control={control} name="ec2Phone" render={({ field }) => <AppInput label="Phone" keyboardType="phone-pad" {...field} onChangeText={field.onChange} />} />
@@ -223,7 +221,12 @@ export default function UserDetails({ navigation }: any) {
 
         {!isEditing && (
           <View style={{ marginTop: 24, width: '100%' }}>
-            <AppButton title="Change Password" onPress={() => setPasswordModalVisible(true)} variant="primary" style={{ marginBottom: 12, backgroundColor: '#1F241D', borderWidth: 1, borderColor: COLORS.accent }} />
+            <AppButton
+              title="Change Password"
+              onPress={() => setPasswordModalVisible(true)}
+              variant="ghost" // Corrected for visibility (White Text)
+              style={{ marginBottom: 12, backgroundColor: '#1F241D', borderWidth: 1, borderColor: COLORS.accent }}
+            />
             <AppButton title="Log Out" onPress={() => setLogoutVisible(true)} variant="ghost" />
             <AppButton title="Delete Account" onPress={() => setDeleteVisible(true)} variant="danger" style={{ marginTop: 12 }} />
           </View>
@@ -232,10 +235,10 @@ export default function UserDetails({ navigation }: any) {
         <View style={styles.footer}>
           <Ionicons name="business" size={24} color={COLORS.textSecondary} style={{ marginBottom: 8 }} />
           <Text style={styles.footerTitle}>All State Bail Bond Services</Text>
-          <Text style={styles.footerText}>0007 A Happy Suite Z</Text>
-          <Text style={styles.footerText}>North East City Pensilvania</Text>
-          <Text style={styles.footerText}>Tel: (561) 123-1234</Text>
-          <Text style={styles.footerText}>Landmark: “ Building with The Statue of Liberty 🗽</Text>
+          <Text style={styles.footerText}>1122 S Congress Ave Suite B</Text>
+          <Text style={styles.footerText}>West Palm Beach Florida 33406</Text>
+          <Text style={styles.footerText}>Tel: +1(561)340-3314</Text>
+          <Text style={styles.footerText}>Landmark: Building with The Statue of Liberty 🗽</Text>
         </View>
       </KeyboardAvoidingView>
 
@@ -247,20 +250,20 @@ export default function UserDetails({ navigation }: any) {
             <Text style={styles.modalSub}>Create a new secure password.</Text>
 
             <Controller control={passControl} name="newPassword" render={({ field, fieldState }) => (
-              <>
+              <View style={{ width: '100%', marginBottom: 12 }}>
                 <SimplePassInput placeholder="New Password (Min 6 chars)" value={field.value} onChangeText={field.onChange} autoFocus={true} />
                 {fieldState.error && <Text style={styles.err}>{fieldState.error.message}</Text>}
-              </>
+              </View>
             )} />
 
             <Controller control={passControl} name="confirmPassword" render={({ field, fieldState }) => (
-              <>
+              <View style={{ width: '100%', marginBottom: 12 }}>
                 <SimplePassInput placeholder="Confirm New Password" value={field.value} onChangeText={field.onChange} />
                 {fieldState.error && <Text style={styles.err}>{fieldState.error.message}</Text>}
-              </>
+              </View>
             )} />
 
-            <View style={{ marginTop: 12 }}>
+            <View style={{ marginTop: 12, width: '100%' }}>
               <AppButton title="Update" onPress={handleSubmit(handlePasswordChange)} />
               <AppButton title="Cancel" onPress={() => setPasswordModalVisible(false)} variant="ghost" />
             </View>
@@ -327,15 +330,22 @@ const styles = StyleSheet.create({
   footer: { marginTop: 40, marginBottom: 40, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#1F241D', paddingTop: 24 },
   footerTitle: { color: COLORS.textPrimary, fontWeight: '700', marginBottom: 6 },
   footerText: { color: COLORS.textSecondary, fontSize: 13, textAlign: 'center', lineHeight: 18 },
-  
+
   // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalCard: { backgroundColor: '#141812', padding: 24, borderRadius: 24, width: '100%', maxWidth: 420, borderWidth: 1, borderColor: '#2A3028' },
+  modalCard: { backgroundColor: '#141812', padding: 24, borderRadius: 24, width: '100%', maxWidth: 420, borderWidth: 1, borderColor: '#2A3028', alignItems: 'center' },
   modalTitle: { color: COLORS.textPrimary, fontSize: 22, fontWeight: 'bold', marginBottom: 4, textAlign: 'center' },
   modalSub: { color: COLORS.textSecondary, fontSize: 14, marginBottom: 20, textAlign: 'center' },
   simpleInput: {
-    backgroundColor: '#0C0E0B', height: LAYOUT.controlHeight, borderRadius: 12, borderWidth: 1, borderColor: '#2A3028',
-    paddingHorizontal: 12, color: COLORS.textPrimary, fontSize: 16
+    width: '100%',
+    height: LAYOUT.controlHeight,
+    backgroundColor: '#0C0E0B',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2A3028',
+    paddingHorizontal: 12,
+    color: COLORS.textPrimary,
+    fontSize: 16
   },
-  err: { color: COLORS.error, marginBottom: 10, fontSize: 12, marginTop: -8 }
+  err: { color: COLORS.error, fontSize: 12, marginTop: 4, marginLeft: 4 }
 });
