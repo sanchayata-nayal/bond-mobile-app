@@ -19,6 +19,7 @@ import PasswordInput from '../components/PasswordInput';
 import DatePickerField from '../components/DatePickerField';
 import AppButton from '../components/AppButton';
 import Collapsible from '../components/Collapsible';
+import PhoneInput from '../components/PhoneInput'; // Using the smart component
 import { useForm, Controller } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -47,7 +48,7 @@ const parseDate = (str: string) => {
 
 const schema = yup.object({
   firstName: yup.string().required('First name is required'),
-  lastName: yup.string(),
+  lastName: yup.string().required('Last name is required'), 
   dob: yup
     .string()
     .required('Date of birth required')
@@ -83,39 +84,6 @@ const schema = yup.object({
   ec3Phone: yup.string().required('Contact 3 phone required').matches(/^\d{10}$/, 'Must be 10 digits'),
 }).required();
 
-/* ---------- Helper Components (Defined Outside) ---------- */
-const CountryPill = () => (
-  <View style={styles.countryPill}>
-    <Text style={styles.countryText}>🇺🇸 +1</Text>
-  </View>
-);
-
-const PhoneField = ({ controlName, label, control, error }: any) => (
-  <View style={{ marginBottom: 14 }}>
-    {label && <Text style={styles.label}>{label}</Text>}
-    <View style={styles.phoneRow}>
-      <CountryPill />
-      <View style={{ flex: 1 }}>
-        <Controller
-          control={control}
-          name={controlName}
-          render={({ field }) => (
-            <AppInput
-              value={field.value}
-              onChangeText={field.onChange}
-              keyboardType="phone-pad"
-              placeholder="5551234567"
-              style={{ marginBottom: 0 }}
-              error={null} 
-            />
-          )}
-        />
-      </View>
-    </View>
-    {error && <Text style={styles.errText}>{error}</Text>}
-  </View>
-);
-
 export default function SignUp({ navigation }: any) {
   const { width } = useWindowDimensions();
   const headingAnim = useRef(new Animated.Value(0)).current;
@@ -127,7 +95,11 @@ export default function SignUp({ navigation }: any) {
   const formWidth = isTabletOrWeb ? 500 : '100%';
 
   useEffect(() => {
-    Animated.timing(headingAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    Animated.timing(headingAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
   const { control, handleSubmit, formState, setValue } = useForm({
@@ -150,7 +122,7 @@ export default function SignUp({ navigation }: any) {
     demoStore.setUser({
       id: Math.random().toString(36).slice(2, 9),
       firstName: formData.firstName,
-      lastName: formData.lastName || '',
+      lastName: formData.lastName,
       dob: formData.dob,
       phone: `+1${formData.phone}`,
       agent: formData.agent,
@@ -164,6 +136,26 @@ export default function SignUp({ navigation }: any) {
     setShowDisclaimer(false);
     navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] });
   };
+
+  // Reusable Phone Component with Dropdown
+  const PhoneField = ({ controlName, label, control, error }: any) => (
+    <View style={{ marginBottom: 2 }}>
+      {label && <Text style={styles.label}>{label}</Text>}
+      <Controller
+        control={control}
+        name={controlName}
+        render={({ field }) => (
+          <PhoneInput
+            value={field.value}
+            onChange={field.onChange}
+            countryCode="+1"
+            placeholder="5551234567"
+            error={error}
+          />
+        )}
+      />
+    </View>
+  );
 
   return (
     <ScreenContainer scrollable>
@@ -182,6 +174,7 @@ export default function SignUp({ navigation }: any) {
         <View style={[styles.card, { width: formWidth }]}>
           
           <Text style={styles.sectionTitle}>Personal Details</Text>
+          
           <View style={styles.row}>
             <View style={{ flex: 1, marginRight: 8 }}>
               <Controller control={control} name="firstName" render={({ field, fieldState }) => (
@@ -190,7 +183,7 @@ export default function SignUp({ navigation }: any) {
             </View>
             <View style={{ flex: 1 }}>
               <Controller control={control} name="lastName" render={({ field, fieldState }) => (
-                <AppInput label="Last Name (Optional)" placeholder="Doe" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+                <AppInput label="Last Name" placeholder="Doe" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
               )} />
             </View>
           </View>
@@ -199,7 +192,12 @@ export default function SignUp({ navigation }: any) {
             <DatePickerField label="Date of Birth" value={field.value} onChange={(v) => setValue('dob', v, { shouldValidate: true })} error={fieldState.error?.message} />
           )} />
 
-          <PhoneField controlName="phone" label="Phone Number" control={control} error={formState.errors.phone?.message} />
+          <PhoneField 
+            controlName="phone" 
+            label="Phone Number" 
+            control={control} 
+            error={formState.errors.phone?.message} 
+          />
 
           <Controller control={control} name="agent" render={({ field, fieldState }) => (
             <AppInput label="Agent Name" icon="business-outline" placeholder="Assigned Agent" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
@@ -251,10 +249,11 @@ export default function SignUp({ navigation }: any) {
           </TouchableOpacity>
 
         </View>
+        
         <View style={{ height: 40 }} /> 
       </KeyboardAvoidingView>
 
-      {/* DISCLAIMER MODAL */}
+      {/* Disclaimer Modal */}
       <Modal visible={showDisclaimer} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -289,6 +288,7 @@ export default function SignUp({ navigation }: any) {
   );
 }
 
+/*Styles*/
 const styles = StyleSheet.create({
   header: { width: '100%', marginBottom: 20, marginTop: 10, flexDirection: 'row', alignItems: 'center' },
   backBtn: { padding: 8, marginRight: 8, borderRadius: 999, backgroundColor: '#1A2018' },
@@ -308,15 +308,6 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: '#1F241D', marginVertical: 16 },
   
   label: { color: COLORS.textSecondary, marginBottom: 8, fontSize: 13 },
-  phoneRow: { flexDirection: 'row' },
-  countryPill: {
-    justifyContent: 'center', alignItems: 'center', 
-    paddingHorizontal: 12, backgroundColor: '#1A2018', 
-    borderRadius: LAYOUT.borderRadius, marginRight: 8,
-    height: LAYOUT.controlHeight, borderWidth: 1, borderColor: '#2A3028'
-  },
-  countryText: { color: COLORS.textPrimary, fontWeight: '700' },
-  errText: { color: COLORS.error, marginTop: 6, fontSize: 12 },
 
   /* Modal */
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },
