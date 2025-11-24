@@ -6,6 +6,7 @@ import DashboardHeader from '../components/DashboardHeader';
 import AppInput from '../components/AppInput';
 import AppButton from '../components/AppButton';
 import PhoneInput from '../components/PhoneInput';
+import ConfirmationModal from '../components/ConfirmationModal'; // Reused custom modal
 import { demoStore } from '../services/demoStore';
 import { COLORS, LAYOUT } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,50 +14,78 @@ import { Ionicons } from '@expo/vector-icons';
 export default function AdminRecipients({ navigation }: any) {
   const [primary, setPrimary] = useState('');
   const [recipients, setRecipients] = useState<any[]>([]);
-  const [modalVisible, setModalVisible] = useState(false);
+  
+  // Modal States
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [selectedDeleteId, setSelectedDeleteId] = useState<string | null>(null);
+  
+  // Dropdown State
+  const [showPrimaryDropdown, setShowPrimaryDropdown] = useState(false);
 
-  // Form State for New Recipient
+  // Form State
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
 
   // Load Initial Data
   useEffect(() => {
-    const data = demoStore.getRecipients();
-    setPrimary(data.primary.replace('+1', '')); // Strip +1 for display if US
-    setRecipients(data.list);
+    refreshData();
   }, []);
 
-  const handleSavePrimary = () => {
-    // In a real app, validate format first
-    demoStore.updatePrimaryNumber(`+1${primary}`);
-    Alert.alert('Success', 'Primary emergency call number updated.');
+  const refreshData = () => {
+    const data = demoStore.getRecipients();
+    setPrimary(data.primary);
+    setRecipients(data.list);
+  };
+
+  const handleSetPrimary = (phone: string) => {
+    demoStore.updatePrimaryNumber(phone);
+    setPrimary(phone);
+    setShowPrimaryDropdown(false);
   };
 
   const handleAddRecipient = () => {
     if (!newName || !newPhone) {
+      // Minimal alert for empty fields is fine, or use custom if preferred
       Alert.alert('Missing Data', 'Please enter both name and phone.');
       return;
     }
+    // Store formatted with +1 for simplicity in this demo
     demoStore.addRecipient(newName, `+1${newPhone}`);
-    setRecipients(demoStore.getRecipients().list); // Refresh list
+    refreshData();
     setNewName('');
     setNewPhone('');
-    setModalVisible(false);
+    setAddModalVisible(false);
   };
 
-  const handleDelete = (id: string) => {
-    Alert.alert('Remove Recipient', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { 
-        text: 'Remove', 
-        style: 'destructive', 
-        onPress: () => {
-          demoStore.removeRecipient(id);
-          setRecipients(demoStore.getRecipients().list);
-        } 
+  const confirmDelete = () => {
+    if (selectedDeleteId) {
+      demoStore.removeRecipient(selectedDeleteId);
+      
+      // If we deleted the primary number, reset primary to empty or first available
+      const updatedList = demoStore.getRecipients().list;
+      if (updatedList.length > 0 && !updatedList.find(r => r.phone === primary)) {
+        const newPrime = updatedList[0].phone;
+        demoStore.updatePrimaryNumber(newPrime);
+        setPrimary(newPrime);
+      } else if (updatedList.length === 0) {
+        demoStore.updatePrimaryNumber('');
+        setPrimary('');
       }
-    ]);
+
+      refreshData();
+    }
+    setDeleteModalVisible(false);
+    setSelectedDeleteId(null);
   };
+
+  const openDeleteModal = (id: string) => {
+    setSelectedDeleteId(id);
+    setDeleteModalVisible(true);
+  };
+
+  // Helper to find name of primary number
+  const primaryName = recipients.find(r => r.phone === primary)?.name || 'Select Recipient';
 
   return (
     <ScreenContainer scrollable>
@@ -69,22 +98,40 @@ export default function AdminRecipients({ navigation }: any) {
           <Text style={styles.sectionTitle}>Primary Emergency Call</Text>
         </View>
         <Text style={styles.sectionDesc}>
-          This single number will be dialed automatically when the user presses "Call Agent".
+          Select one contact from the list below to receive the direct emergency phone call.
         </Text>
 
-        <View style={styles.primaryRow}>
-          <View style={{ flex: 1 }}>
-            <PhoneInput 
-              value={primary} 
-              onChange={setPrimary} 
-              countryCode="+1"
-              placeholder="Primary Agent Number"
-            />
+        {/* Custom Dropdown Trigger */}
+        <TouchableOpacity 
+          style={styles.dropdownTrigger} 
+          onPress={() => setShowPrimaryDropdown(!showPrimaryDropdown)}
+          activeOpacity={0.8}
+        >
+          <View>
+            <Text style={styles.dropdownLabel}>Selected Agent</Text>
+            <Text style={styles.dropdownValue}>{primaryName}</Text>
+            {primary ? <Text style={styles.dropdownSub}>{primary}</Text> : null}
           </View>
-          <TouchableOpacity onPress={handleSavePrimary} style={styles.saveBtn}>
-            <Ionicons name="checkmark" size={24} color="#000" />
-          </TouchableOpacity>
-        </View>
+          <Ionicons name={showPrimaryDropdown ? "chevron-up" : "chevron-down"} size={20} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+
+        {/* Dropdown Body */}
+        {showPrimaryDropdown && (
+          <View style={styles.dropdownBody}>
+            {recipients.length === 0 && <Text style={styles.emptyText}>No recipients added yet.</Text>}
+            {recipients.map((r) => (
+              <TouchableOpacity 
+                key={r.id} 
+                style={[styles.dropdownItem, primary === r.phone && styles.dropdownItemActive]} 
+                onPress={() => handleSetPrimary(r.phone)}
+              >
+                <Text style={[styles.dropdownItemName, primary === r.phone && { color: COLORS.background }]}>{r.name}</Text>
+                <Text style={[styles.dropdownItemPhone, primary === r.phone && { color: COLORS.background }]}>{r.phone}</Text>
+                {primary === r.phone && <Ionicons name="checkmark-circle" size={18} color={COLORS.background} style={{position: 'absolute', right: 12}} />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* --- SECTION 2: SMS BROADCAST --- */}
@@ -107,21 +154,22 @@ export default function AdminRecipients({ navigation }: any) {
               <Text style={styles.cardName}>{r.name}</Text>
               <Text style={styles.cardPhone}>{r.phone}</Text>
             </View>
-            <TouchableOpacity onPress={() => handleDelete(r.id)} style={styles.deleteBtn}>
+            <TouchableOpacity onPress={() => openDeleteModal(r.id)} style={styles.deleteBtn}>
               <Ionicons name="trash-outline" size={20} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
         ))}
 
-        {/* Add Button */}
-        <TouchableOpacity style={styles.addBtn} onPress={() => setModalVisible(true)}>
+        <TouchableOpacity style={styles.addBtn} onPress={() => setAddModalVisible(true)}>
           <Ionicons name="add" size={24} color="#000" />
           <Text style={styles.addBtnText}>Add New Recipient</Text>
         </TouchableOpacity>
       </View>
 
-      {/* --- ADD RECIPIENT MODAL --- */}
-      <Modal visible={modalVisible} transparent animationType="slide">
+      {/* --- MODALS --- */}
+      
+      {/* Add Modal */}
+      <Modal visible={addModalVisible} transparent animationType="slide">
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>New Recipient</Text>
@@ -146,12 +194,24 @@ export default function AdminRecipients({ navigation }: any) {
             </View>
 
             <View style={styles.modalActions}>
-              <AppButton title="Cancel" onPress={() => setModalVisible(false)} variant="ghost" style={{ flex: 1, marginRight: 8 }} />
+              <AppButton title="Cancel" onPress={() => setAddModalVisible(false)} variant="ghost" style={{ flex: 1, marginRight: 8 }} />
               <AppButton title="Add" onPress={handleAddRecipient} style={{ flex: 1, marginLeft: 8 }} />
             </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        visible={deleteModalVisible}
+        title="Remove Recipient"
+        message="Are you sure you want to remove this contact from the broadcast list?"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteModalVisible(false)}
+        confirmText="Remove"
+        variant="danger"
+        icon="trash-outline"
+      />
 
     </ScreenContainer>
   );
@@ -163,14 +223,26 @@ const styles = StyleSheet.create({
   sectionTitle: { color: COLORS.textPrimary, fontSize: 18, fontWeight: '800', marginLeft: 10 },
   sectionDesc: { color: COLORS.textSecondary, fontSize: 13, lineHeight: 18, marginBottom: 16 },
   
-  primaryRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  saveBtn: { 
-    height: LAYOUT.controlHeight, width: LAYOUT.controlHeight, 
-    backgroundColor: COLORS.accent, borderRadius: 12, 
-    alignItems: 'center', justifyContent: 'center', 
-    marginTop: 24 // Align with input visual
+  /* Dropdown Style */
+  dropdownTrigger: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: '#141812', borderRadius: 12, padding: 16,
+    borderWidth: 1, borderColor: COLORS.accent,
   },
+  dropdownLabel: { color: COLORS.textSecondary, fontSize: 12, marginBottom: 4 },
+  dropdownValue: { color: COLORS.textPrimary, fontSize: 16, fontWeight: '700' },
+  dropdownSub: { color: COLORS.accent, fontSize: 13, marginTop: 2 },
   
+  dropdownBody: {
+    marginTop: 8, backgroundColor: '#141812', borderRadius: 12,
+    borderWidth: 1, borderColor: '#2A3028', overflow: 'hidden'
+  },
+  dropdownItem: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#2A3028', justifyContent: 'center' },
+  dropdownItemActive: { backgroundColor: COLORS.accent },
+  dropdownItemName: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '700' },
+  dropdownItemPhone: { color: COLORS.textSecondary, fontSize: 13 },
+  emptyText: { color: COLORS.textSecondary, padding: 16, textAlign: 'center' },
+
   /* List Card */
   card: { 
     flexDirection: 'row', alignItems: 'center', padding: 14, 
@@ -183,10 +255,9 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: COLORS.textSecondary, fontSize: 11, fontWeight: 'bold' },
   cardName: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '700', marginBottom: 2 },
-  cardPhone: { color: COLORS.accent, fontSize: 13 },
+  cardPhone: { color: COLORS.textSecondary, fontSize: 13 },
   deleteBtn: { padding: 8 },
 
-  /* Add Button */
   addBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     backgroundColor: COLORS.accent, height: 48, borderRadius: 12, marginTop: 8

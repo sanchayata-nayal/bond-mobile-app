@@ -11,8 +11,7 @@ export default function AdminLanding({ navigation }: any) {
   const AdminCard = ({ title, icon, subtitle, onPress, color }: any) => (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
       <View style={[styles.iconBox, { backgroundColor: color }]}>
-        <Ionicons name={icon} size={28} color="#000" /> 
-        {/* Icons are black on colored background for high contrast */}
+        <Ionicons name={icon} size={28} color="#0F150D" /> 
       </View>
       <View style={styles.textArea}>
         <Text style={styles.cardTitle}>{title}</Text>
@@ -34,17 +33,17 @@ export default function AdminLanding({ navigation }: any) {
 
       <AdminCard 
         title="SMS & Call Routing" 
-        subtitle="Configure primary emergency dialer and SMS broadcast list."
+        subtitle="Configure primary dialer and broadcast list."
         icon="git-network-outline"
-        color="#4A90E2" // Cyan/Blue
+        color={COLORS.accent} // The main Lime
         onPress={() => navigation.navigate('AdminRecipients')}
       />
 
       <AdminCard 
         title="User Management" 
-        subtitle="Monitor registered users, search details, or remove accounts."
+        subtitle="Monitor users, search details, or remove accounts."
         icon="people-outline"
-        color="#BD10E0" // Violet
+        color="#8A9A5B" // Sage Green (Fits theme perfectly)
         onPress={() => navigation.navigate('AdminUsers')}
       />
 
@@ -52,7 +51,7 @@ export default function AdminLanding({ navigation }: any) {
         title="Live Metrics" 
         subtitle="Real-time analytics on signups and panic triggers."
         icon="bar-chart-outline"
-        color="#F5A623" // Amber (Warning/Caution but not Panic Red)
+        color="#E0E6C8" // Pale Ivory/Lime
         onPress={() => navigation.navigate('AdminMetrics')}
       />
 
@@ -60,7 +59,7 @@ export default function AdminLanding({ navigation }: any) {
         <Ionicons name="cloud-done-outline" size={24} color={COLORS.accent} />
         <Text style={styles.infoText}>
           System status: <Text style={{ color: COLORS.accent, fontWeight: 'bold' }}>Online</Text>{'\n'}
-          All changes sync immediately with the user app.
+          All changes sync immediately.
         </Text>
       </View>
 
@@ -80,7 +79,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#2A3028',
-    // Subtle shadow
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -96,11 +94,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     marginTop: 24, 
     padding: 20, 
-    backgroundColor: 'rgba(187, 198, 51, 0.1)', // Low opacity accent
+    backgroundColor: 'rgba(187, 198, 51, 0.08)',
     borderRadius: 16, 
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(187, 198, 51, 0.2)'
+    borderColor: 'rgba(187, 198, 51, 0.15)'
   },
   infoText: { color: COLORS.textSecondary, fontSize: 13, marginLeft: 12, flex: 1, lineHeight: 19 },
 });
