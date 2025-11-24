@@ -1,110 +1,205 @@
 // src/screens/AdminRecipients.tsx
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import DashboardHeader from '../components/DashboardHeader';
 import AppInput from '../components/AppInput';
 import AppButton from '../components/AppButton';
+import PhoneInput from '../components/PhoneInput';
 import { demoStore } from '../services/demoStore';
 import { COLORS, LAYOUT } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function AdminRecipients({ navigation }: any) {
-  const data = demoStore.getRecipients();
-  const [primary, setPrimary] = useState(data.primary);
+  const [primary, setPrimary] = useState('');
+  const [recipients, setRecipients] = useState<any[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  // Form State for New Recipient
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
-  const [recipients, setRecipients] = useState(data.list);
+
+  // Load Initial Data
+  useEffect(() => {
+    const data = demoStore.getRecipients();
+    setPrimary(data.primary.replace('+1', '')); // Strip +1 for display if US
+    setRecipients(data.list);
+  }, []);
 
   const handleSavePrimary = () => {
-    demoStore.updatePrimaryNumber(primary);
-    Alert.alert('Success', 'Primary agent number updated.');
+    // In a real app, validate format first
+    demoStore.updatePrimaryNumber(`+1${primary}`);
+    Alert.alert('Success', 'Primary emergency call number updated.');
   };
 
-  const handleAdd = () => {
-    if (!newName || !newPhone) return;
-    demoStore.addRecipient(newName, newPhone);
-    setRecipients(demoStore.getRecipients().list); // Refresh
+  const handleAddRecipient = () => {
+    if (!newName || !newPhone) {
+      Alert.alert('Missing Data', 'Please enter both name and phone.');
+      return;
+    }
+    demoStore.addRecipient(newName, `+1${newPhone}`);
+    setRecipients(demoStore.getRecipients().list); // Refresh list
     setNewName('');
     setNewPhone('');
+    setModalVisible(false);
   };
 
   const handleDelete = (id: string) => {
-    demoStore.removeRecipient(id);
-    setRecipients(demoStore.getRecipients().list);
+    Alert.alert('Remove Recipient', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      { 
+        text: 'Remove', 
+        style: 'destructive', 
+        onPress: () => {
+          demoStore.removeRecipient(id);
+          setRecipients(demoStore.getRecipients().list);
+        } 
+      }
+    ]);
   };
 
   return (
     <ScreenContainer scrollable>
-      <DashboardHeader title="Recipients" showBack onBackPress={() => navigation.goBack()} userInitial="A" />
+      <DashboardHeader title="Routing Config" showBack onBackPress={() => navigation.goBack()} userInitial="A" />
 
-      {/* Primary Number Section */}
-      <View style={styles.section}>
-        <Text style={styles.heading}>Primary Call Number</Text>
-        <Text style={styles.sub}>This number is dialed when users panic.</Text>
-        
-        <View style={styles.row}>
+      {/* --- SECTION 1: PRIMARY CALL --- */}
+      <View style={styles.sectionContainer}>
+        <View style={styles.sectionHeaderRow}>
+          <Ionicons name="call" size={20} color={COLORS.accent} />
+          <Text style={styles.sectionTitle}>Primary Emergency Call</Text>
+        </View>
+        <Text style={styles.sectionDesc}>
+          This single number will be dialed automatically when the user presses "Call Agent".
+        </Text>
+
+        <View style={styles.primaryRow}>
           <View style={{ flex: 1 }}>
-            <AppInput 
+            <PhoneInput 
               value={primary} 
-              onChangeText={setPrimary} 
-              keyboardType="phone-pad" 
-              icon="call"
+              onChange={setPrimary} 
+              countryCode="+1"
+              placeholder="Primary Agent Number"
             />
           </View>
           <TouchableOpacity onPress={handleSavePrimary} style={styles.saveBtn}>
-            <Ionicons name="save-outline" size={20} color="#000" />
+            <Ionicons name="checkmark" size={24} color="#000" />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* SMS List Section */}
-      <View style={styles.section}>
-        <Text style={styles.heading}>SMS Notification List</Text>
-        <Text style={styles.sub}>These contacts receive the SOS text message.</Text>
+      {/* --- SECTION 2: SMS BROADCAST --- */}
+      <View style={styles.sectionContainer}>
+        <View style={styles.sectionHeaderRow}>
+          <Ionicons name="chatbubbles" size={20} color={COLORS.accent} />
+          <Text style={styles.sectionTitle}>SMS Broadcast List</Text>
+        </View>
+        <Text style={styles.sectionDesc}>
+          The panic alert SMS will be sent to all recipients below simultaneously.
+        </Text>
 
-        {recipients.map((r) => (
-          <View key={r.id} style={styles.itemRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.itemName}>{r.name}</Text>
-              <Text style={styles.itemPhone}>{r.phone}</Text>
+        {/* List */}
+        {recipients.map((r, index) => (
+          <View key={r.id} style={styles.card}>
+            <View style={styles.cardBadge}>
+              <Text style={styles.badgeText}>{index + 1}</Text>
             </View>
-            <TouchableOpacity onPress={() => handleDelete(r.id)} style={styles.delBtn}>
-              <Ionicons name="trash-outline" size={18} color={COLORS.panic} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardName}>{r.name}</Text>
+              <Text style={styles.cardPhone}>{r.phone}</Text>
+            </View>
+            <TouchableOpacity onPress={() => handleDelete(r.id)} style={styles.deleteBtn}>
+              <Ionicons name="trash-outline" size={20} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
         ))}
 
-        {/* Add New */}
-        <View style={styles.addBox}>
-          <Text style={styles.addTitle}>Add New Recipient</Text>
-          <AppInput placeholder="Name (e.g. Dispatch)" value={newName} onChangeText={setNewName} />
-          <AppInput placeholder="Phone (+1...)" value={newPhone} onChangeText={setNewPhone} keyboardType="phone-pad" />
-          <AppButton title="Add Recipient" onPress={handleAdd} disabled={!newName || !newPhone} />
-        </View>
+        {/* Add Button */}
+        <TouchableOpacity style={styles.addBtn} onPress={() => setModalVisible(true)}>
+          <Ionicons name="add" size={24} color="#000" />
+          <Text style={styles.addBtnText}>Add New Recipient</Text>
+        </TouchableOpacity>
       </View>
+
+      {/* --- ADD RECIPIENT MODAL --- */}
+      <Modal visible={modalVisible} transparent animationType="slide">
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>New Recipient</Text>
+            <Text style={styles.modalSub}>Add a contact to the SOS broadcast.</Text>
+            
+            <AppInput 
+              label="Agent / Desk Name" 
+              placeholder="e.g. Central Dispatch" 
+              value={newName} 
+              onChangeText={setNewName} 
+              autoFocus
+            />
+            
+            <View style={{ marginBottom: 14 }}>
+              <Text style={{ color: COLORS.textSecondary, marginBottom: 8, fontSize: 13 }}>Phone Number</Text>
+              <PhoneInput 
+                value={newPhone} 
+                onChange={setNewPhone} 
+                countryCode="+1" 
+                placeholder="561..." 
+              />
+            </View>
+
+            <View style={styles.modalActions}>
+              <AppButton title="Cancel" onPress={() => setModalVisible(false)} variant="ghost" style={{ flex: 1, marginRight: 8 }} />
+              <AppButton title="Add" onPress={handleAddRecipient} style={{ flex: 1, marginLeft: 8 }} />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { marginBottom: 32, width: '100%' },
-  heading: { color: COLORS.textPrimary, fontSize: 18, fontWeight: '800', marginBottom: 4 },
-  sub: { color: COLORS.textSecondary, fontSize: 13, marginBottom: 16 },
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  sectionContainer: { marginBottom: 32, width: '100%' },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  sectionTitle: { color: COLORS.textPrimary, fontSize: 18, fontWeight: '800', marginLeft: 10 },
+  sectionDesc: { color: COLORS.textSecondary, fontSize: 13, lineHeight: 18, marginBottom: 16 },
+  
+  primaryRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   saveBtn: { 
     height: LAYOUT.controlHeight, width: LAYOUT.controlHeight, 
     backgroundColor: COLORS.accent, borderRadius: 12, 
-    alignItems: 'center', justifyContent: 'center', marginBottom: 14 
+    alignItems: 'center', justifyContent: 'center', 
+    marginTop: 24 // Align with input visual
   },
-  itemRow: { 
-    flexDirection: 'row', alignItems: 'center', padding: 16, 
+  
+  /* List Card */
+  card: { 
+    flexDirection: 'row', alignItems: 'center', padding: 14, 
     backgroundColor: '#141812', borderRadius: 12, marginBottom: 10,
     borderWidth: 1, borderColor: '#2A3028'
   },
-  itemName: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '700' },
-  itemPhone: { color: COLORS.textSecondary, fontSize: 13 },
-  delBtn: { padding: 8 },
-  addBox: { marginTop: 10, padding: 16, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 16 },
-  addTitle: { color: COLORS.accent, fontSize: 14, fontWeight: '700', marginBottom: 12 },
+  cardBadge: { 
+    width: 24, height: 24, borderRadius: 12, backgroundColor: '#2A3028', 
+    alignItems: 'center', justifyContent: 'center', marginRight: 12 
+  },
+  badgeText: { color: COLORS.textSecondary, fontSize: 11, fontWeight: 'bold' },
+  cardName: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  cardPhone: { color: COLORS.accent, fontSize: 13 },
+  deleteBtn: { padding: 8 },
+
+  /* Add Button */
+  addBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.accent, height: 48, borderRadius: 12, marginTop: 8
+  },
+  addBtnText: { color: '#000', fontWeight: '700', fontSize: 15, marginLeft: 8 },
+
+  /* Modal */
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalCard: { 
+    backgroundColor: '#141812', padding: 24, borderRadius: 20, width: '100%', maxWidth: 420, 
+    borderWidth: 1, borderColor: '#2A3028'
+  },
+  modalTitle: { color: COLORS.textPrimary, fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
+  modalSub: { color: COLORS.textSecondary, fontSize: 13, marginBottom: 20 },
+  modalActions: { flexDirection: 'row', marginTop: 12 },
 });
