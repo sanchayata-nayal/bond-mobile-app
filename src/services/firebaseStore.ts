@@ -33,8 +33,11 @@ export type UserProfile = {
   emergencyContacts: EmergencyContact[];
   role: 'user' | 'admin';
   joinedAt: string;      // ISO Date
-  consentGiven: boolean; // Legal requirement
   panicCount: number;
+  // Legal Consent Fields
+  consentGiven: boolean;
+  consentTimestamp: string;
+  consentText: string;
 };
 
 export type Recipient = {
@@ -71,8 +74,11 @@ export const firebaseStore = {
         ],
         role: 'user',
         joinedAt: new Date().toISOString(),
-        consentGiven: true, // Captured from disclaimer
         panicCount: 0,
+        // Legal Compliance
+        consentGiven: true,
+        consentTimestamp: data.consentTimestamp || new Date().toISOString(),
+        consentText: data.consentText || 'Standard Disclaimer',
       };
 
       // C. Save to Firestore 'users' collection

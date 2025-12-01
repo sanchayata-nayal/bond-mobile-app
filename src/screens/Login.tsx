@@ -9,6 +9,7 @@ import {
   Platform,
   Modal,
   ScrollView,
+  TextInput,
 } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import AppInput from '../components/AppInput';
@@ -19,12 +20,13 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import PhoneInput from '../components/PhoneInput';
 import { useForm, Controller } from 'react-hook-form';
 import { demoStore } from '../services/demoStore';
+import { firebaseStore } from '../services/firebaseStore'; // <--- IMPORT
 import { COLORS, LAYOUT } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
 
-/* ---------- MOCK DATA ---------- */
+/* ---------- MOCK DATA (For Forgot Password Verify only for now) ---------- */
 const MOCK_USER = {
   id: 'test-user-001',
   firstName: 'John',
@@ -33,11 +35,6 @@ const MOCK_USER = {
   phone: '+15615550100',
   agent: 'Agent Smith',
   email: 'demo@bond.com',
-  emergencyContacts: [
-    { name: 'Jane Doe', phone: '+15615550199' },
-    { name: 'Bob Smith', phone: '+15615550188' },
-    { name: 'Alice Wonderland', phone: '+15615550177' },
-  ],
 };
 
 /* ---------- SCHEMAS ---------- */
@@ -56,6 +53,35 @@ const forgotIdentitySchema = yup.object({
   agent: yup.string().required('Required'),
 }).required();
 
+const forgotResetSchema = yup.object({
+  newPassword: yup.string().required('Required').matches(PASSWORD_REGEX, PASSWORD_ERROR),
+}).required();
+
+/* ---------- SIMPLE LOCAL INPUT (FAILSAFE) ---------- */
+const SimpleResetInput = ({ value, onChangeText, placeholder, error, autoFocus }: any) => {
+  const [show, setShow] = useState(false);
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <View style={[styles.simpleWrapper, error ? { borderColor: COLORS.error } : null]}>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor="#7A7A7A"
+          secureTextEntry={!show}
+          style={styles.simpleInput}
+          autoCapitalize="none"
+          autoFocus={autoFocus}
+        />
+        <TouchableOpacity onPress={() => setShow(!show)} style={{ padding: 10 }}>
+          <Ionicons name={show ? 'eye-off' : 'eye'} size={20} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+      </View>
+      {error ? <Text style={styles.err}>{error}</Text> : null}
+    </View>
+  );
+};
+
 export default function Login({ navigation }: any) {
   /* --- LOGIN FORM --- */
   const { control, handleSubmit, formState } = useForm({
@@ -66,14 +92,16 @@ export default function Login({ navigation }: any) {
 
   /* --- STATE --- */
   const [forgotVisible, setForgotVisible] = useState(false);
-  const [alertConfig, setAlertConfig] = useState<{ visible: boolean, title: string, message: string, type: 'success' | 'error' }>({
+  const [resetStep, setResetStep] = useState<1 | 2>(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{visible: boolean, title: string, message: string, type: 'success' | 'error'}>({
     visible: false, title: '', message: '', type: 'error'
   });
 
-  /* --- FORGOT PASSWORD FORM --- */
-  const {
-    control: identityControl,
-    handleSubmit: handleIdentitySubmit,
+  /* --- FORGOT FORMS --- */
+  const { 
+    control: identityControl, 
+    handleSubmit: handleIdentitySubmit, 
     formState: identityState,
     reset: resetIdentity
   } = useForm({
@@ -82,58 +110,86 @@ export default function Login({ navigation }: any) {
     mode: 'onChange',
   });
 
+  const { 
+    control: resetControl, 
+    handleSubmit: handleResetSubmit, 
+    formState: resetState,
+    reset: resetFinal
+  } = useForm({
+    defaultValues: { newPassword: '' },
+    resolver: yupResolver(forgotResetSchema),
+    mode: 'onChange',
+  });
+
   const showAlert = (title: string, message: string, type: 'success' | 'error') => {
     setAlertConfig({ visible: true, title, message, type });
   };
 
   /* --- HANDLERS --- */
-  // Inside src/screens/Login.tsx
-
-  const onLogin = (data: any) => {
-    // ADMIN CHECK
+  const onLogin = async (data: any) => {
+    // ADMIN BACKDOOR
     if (data.email.toLowerCase() === 'admin@bond.com' && data.password === 'admin123') {
-      // Navigate to Admin Flow
       navigation.reset({ index: 0, routes: [{ name: 'AdminLanding' }] });
       return;
     }
 
-    // EXISTING USER CHECK
-    if (data.email.toLowerCase() === 'demo@bond.com' && data.password === 'bond123') {
-      demoStore.setUser(MOCK_USER);
+    setIsLoading(true);
+    try {
+      // REAL FIREBASE LOGIN
+      const userProfile = await firebaseStore.loginUser(data.email, data.password);
+      
+      // Update local session
+      demoStore.setUser(userProfile);
+      
       navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] });
-    } else {
-      showAlert('Login Failed', 'Invalid email or password.', 'error');
+    } catch (error: any) {
+      // Clean up error message
+      let msg = error.message;
+      if (msg.includes('auth/invalid-credential')) msg = 'Invalid email or password.';
+      showAlert('Login Failed', msg, 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const onVerifyIdentity = (data: any) => {
-    // Mock Verification
-    const isValid =
-      (data.email.toLowerCase() === MOCK_USER.email || true) &&
+    // NOTE: In a real "no-backend" setup, verify against mock or implement a client-side query
+    // For now, we keep the mock check to allow you to test the UI flow.
+    const isValid = 
+      (data.email.toLowerCase() === MOCK_USER.email || true) && 
       data.agent.trim().toLowerCase() === MOCK_USER.agent.toLowerCase() &&
       (data.dob === MOCK_USER.dob || data.dob === '05/15/1985') &&
       (data.phone === MOCK_USER.phone.replace('+1', '') || data.phone === '5615550100');
 
     if (isValid) {
-      // SUCCESS: Log them in directly
-      setForgotVisible(false);
-      resetIdentity();
-      demoStore.setUser(MOCK_USER); // Log them in
-      navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] });
+      resetFinal({ newPassword: '' });
+      setResetStep(2);
     } else {
       showAlert('Verification Failed', 'Details do not match our records.', 'error');
     }
   };
 
+  const onFinalizeReset = (data: any) => {
+    setForgotVisible(false);
+    setResetStep(1);
+    resetIdentity();
+    resetFinal();
+    setTimeout(() => {
+      showAlert('Success', 'Password updated successfully. Please login.', 'success');
+    }, 500);
+  };
+
   const closeForgot = () => {
     setForgotVisible(false);
+    setResetStep(1);
     resetIdentity();
+    resetFinal();
   };
 
   return (
     <ScreenContainer scrollable={false}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
         style={styles.container}
       >
         <View style={styles.header}>
@@ -146,25 +202,25 @@ export default function Login({ navigation }: any) {
 
         <View style={styles.form}>
           <Controller control={control} name="email" render={({ field, fieldState }) => (
-            <AppInput
-              label="Email Address"
-              placeholder="Enter your email"
-              icon="mail-outline"
-              value={field.value}
-              onChangeText={field.onChange}
-              error={fieldState.error?.message}
-              autoCapitalize="none"
-              keyboardType="email-address"
+            <AppInput 
+              label="Email Address" 
+              placeholder="Enter your email" 
+              icon="mail-outline" 
+              value={field.value} 
+              onChangeText={field.onChange} 
+              error={fieldState.error?.message} 
+              autoCapitalize="none" 
+              keyboardType="email-address" 
             />
           )} />
 
           <Controller control={control} name="password" render={({ field, fieldState }) => (
-            <PasswordInput
-              label="Password"
-              placeholder="Enter password"
-              value={field.value}
-              onChangeText={field.onChange}
-              error={fieldState.error?.message}
+            <PasswordInput 
+              label="Password" 
+              placeholder="Enter password" 
+              value={field.value} 
+              onChangeText={field.onChange} 
+              error={fieldState.error?.message} 
             />
           )} />
 
@@ -174,10 +230,10 @@ export default function Login({ navigation }: any) {
 
           <View style={{ height: 24 }} />
 
-          <AppButton
-            title="Login"
-            onPress={handleSubmit(onLogin)}
-            disabled={!formState.isValid}
+          <AppButton 
+            title={isLoading ? "Logging in..." : "Login"} 
+            onPress={handleSubmit(onLogin)} 
+            disabled={!formState.isValid || isLoading} 
           />
 
           <View style={styles.footer}>
@@ -193,41 +249,63 @@ export default function Login({ navigation }: any) {
       <Modal visible={forgotVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
+            
+            {resetStep === 1 ? (
+              <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Text style={styles.modalTitle}>Recover Account</Text>
+                <Text style={styles.modalSub}>Enter your details to verify identity.</Text>
 
-            <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <Text style={styles.modalTitle}>Recover Account</Text>
-              <Text style={styles.modalSub}>Verify details to login securely.</Text>
+                <Controller control={identityControl} name="email" render={({ field, fieldState }) => (
+                  <AppInput label="Email" placeholder="Enter email" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+                )} />
+                
+                <Controller control={identityControl} name="phone" render={({ field, fieldState }) => (
+                  <View style={{ marginBottom: 14 }}>
+                    <Text style={styles.label}>Phone Number</Text>
+                    <PhoneInput 
+                      value={field.value} 
+                      onChange={field.onChange} 
+                      countryCode="+1" 
+                      placeholder="1234567890"
+                      error={fieldState.error?.message}
+                    />
+                  </View>
+                )} />
 
-              <Controller control={identityControl} name="email" render={({ field, fieldState }) => (
-                <AppInput label="Email" placeholder="Enter email" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
-              )} />
+                <Controller control={identityControl} name="agent" render={({ field, fieldState }) => (
+                  <AppInput label="Agent Name" placeholder="Enter Agent Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+                )} />
 
-              <Controller control={identityControl} name="phone" render={({ field, fieldState }) => (
-                <View style={{ marginBottom: 14 }}>
-                  <Text style={styles.label}>Phone Number</Text>
-                  <PhoneInput
-                    value={field.value}
-                    onChange={field.onChange}
-                    countryCode="+1"
-                    placeholder="1234567890"
-                    error={fieldState.error?.message}
-                  />
+                <Controller control={identityControl} name="dob" render={({ field, fieldState }) => (
+                  <DatePickerField label="Date of Birth" value={field.value} onChange={field.onChange} placeholder="MM/DD/YYYY" error={fieldState.error?.message} />
+                )} />
+
+                <View style={{ marginTop: 10 }}>
+                  <AppButton title="Verify Identity" onPress={handleIdentitySubmit(onVerifyIdentity)} disabled={!identityState.isValid} />
+                  <AppButton title="Cancel" onPress={closeForgot} variant="ghost" />
                 </View>
-              )} />
+              </ScrollView>
+            ) : (
+              <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Text style={styles.modalTitle}>Set New Password</Text>
+                <Text style={styles.modalSub}>Identity verified. Create a new password.</Text>
 
-              <Controller control={identityControl} name="agent" render={({ field, fieldState }) => (
-                <AppInput label="Agent Name" placeholder="Enter Agent Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
-              )} />
+                <Controller control={resetControl} name="newPassword" render={({ field, fieldState }) => (
+                  <SimpleResetInput 
+                    placeholder="Min 6 chars (Alpha-numeric)" 
+                    value={field.value} 
+                    onChangeText={field.onChange} 
+                    error={fieldState.error?.message}
+                    autoFocus={true}
+                  />
+                )} />
 
-              <Controller control={identityControl} name="dob" render={({ field, fieldState }) => (
-                <DatePickerField label="Date of Birth" value={field.value} onChange={field.onChange} placeholder="MM/DD/YYYY" error={fieldState.error?.message} />
-              )} />
-
-              <View style={{ marginTop: 10 }}>
-                <AppButton title="Verify & Login" onPress={handleIdentitySubmit(onVerifyIdentity)} disabled={!identityState.isValid} />
-                <AppButton title="Cancel" onPress={closeForgot} variant="ghost" />
-              </View>
-            </ScrollView>
+                <View style={{ marginTop: 10 }}>
+                  <AppButton title="Update Password" onPress={handleResetSubmit(onFinalizeReset)} disabled={!resetState.isValid} />
+                  <AppButton title="Cancel" onPress={closeForgot} variant="ghost" />
+                </View>
+              </ScrollView>
+            )}
 
           </View>
         </View>
@@ -241,7 +319,7 @@ export default function Login({ navigation }: any) {
         icon={alertConfig.type === 'success' ? 'checkmark-circle' : 'alert-circle'}
         variant={alertConfig.type === 'success' ? 'primary' : 'danger'}
         confirmText="OK"
-        cancelText=""
+        cancelText="" 
         onConfirm={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
         onCancel={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
       />
@@ -263,12 +341,20 @@ const styles = StyleSheet.create({
   footerText: { color: COLORS.textSecondary, fontSize: 14 },
   link: { color: COLORS.accent, fontWeight: 'bold', fontSize: 14 },
   label: { color: COLORS.textSecondary, marginBottom: 8, fontSize: 13 },
-
+  
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalCard: {
-    backgroundColor: '#141812', padding: 24, borderRadius: 24, width: '100%', maxWidth: 420,
-    borderWidth: 1, borderColor: '#2A3028', maxHeight: '90%'
+  modalCard: { 
+    backgroundColor: '#141812', padding: 24, borderRadius: 24, width: '100%', maxWidth: 420, 
+    borderWidth: 1, borderColor: '#2A3028', maxHeight: '90%' 
   },
   modalTitle: { color: COLORS.textPrimary, fontSize: 22, fontWeight: 'bold', marginBottom: 4, textAlign: 'center' },
   modalSub: { color: COLORS.textSecondary, fontSize: 14, marginBottom: 20, textAlign: 'center' },
+
+  /* Simple Input Styles */
+  simpleWrapper: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0C0E0B', 
+    borderRadius: LAYOUT.borderRadius, borderWidth: 1, borderColor: '#2A3028', height: LAYOUT.controlHeight 
+  },
+  simpleInput: { flex: 1, color: COLORS.textPrimary, paddingHorizontal: 12, fontSize: 16, height: '100%' },
+  err: { color: COLORS.error, marginTop: 6, fontSize: 12 },
 });

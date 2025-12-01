@@ -11,7 +11,7 @@ import {
   Alert,
   Modal,
   useWindowDimensions,
-  ScrollView,
+  ScrollView
 } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import AppInput from '../components/AppInput';
@@ -24,8 +24,12 @@ import { useForm, Controller } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { demoStore } from '../services/demoStore';
+import { firebaseStore } from '../services/firebaseStore';
 import { COLORS, LAYOUT } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
+
+/* ---------- CONSTANTS ---------- */
+const LEGAL_DISCLAIMER_TEXT = `By using the Bond App, you expressly consent to the collection, storage, and processing of the personal information provided, including your real-time location, personal identification, and emergency contact details. You grant the Bond App permission to access and utilize your device's geolocation data solely for the purpose of deploying emergency assistance. You understand that this data may be transmitted to your designated emergency contacts and/or safety agents in the event of a panic alert.`;
 
 /* ---------- Validation Logic ---------- */
 const parseDate = (str: string) => {
@@ -84,9 +88,7 @@ const schema = yup.object({
   ec3Phone: yup.string().required('Contact 3 phone required').matches(/^\d{10}$/, 'Must be 10 digits'),
 }).required();
 
-/* FIX: Moved Component OUTSIDE of the main render function.
-   This prevents React from re-creating it on every keystroke (which closes keyboard).
-*/
+/* FIX: PhoneField Outside Render */
 const PhoneField = ({ controlName, label, control, error }: any) => (
   <View style={{ marginBottom: 2 }}>
     {label && <Text style={styles.label}>{label}</Text>}
@@ -110,6 +112,7 @@ export default function SignUp({ navigation }: any) {
   const { width } = useWindowDimensions();
   const headingAnim = useRef(new Animated.Value(0)).current;
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   
   const [formData, setFormData] = useState<any>(null);
 
@@ -138,25 +141,40 @@ export default function SignUp({ navigation }: any) {
     setShowDisclaimer(true);
   };
 
-  const onConsent = () => {
+  const onConsent = async () => {
     if (!formData) return;
+    setIsLoading(true);
+    
+    // Capture the exact moment of consent
+    const timestamp = new Date().toISOString();
 
-    demoStore.setUser({
-      id: Math.random().toString(36).slice(2, 9),
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      dob: formData.dob,
-      phone: `+1${formData.phone}`,
-      agent: formData.agent,
-      emergencyContacts: [
-        { name: formData.ec1Name, phone: `+1${formData.ec1Phone}` },
-        { name: formData.ec2Name, phone: `+1${formData.ec2Phone}` },
-        { name: formData.ec3Name, phone: `+1${formData.ec3Phone}` },
-      ],
-    });
+    try {
+      // 1. Create User in Firebase
+      const newUser = await firebaseStore.registerUser({
+        ...formData,
+        phone: `+1${formData.phone}`,
+        ec1Phone: `+1${formData.ec1Phone}`,
+        ec2Phone: `+1${formData.ec2Phone}`,
+        ec3Phone: `+1${formData.ec3Phone}`,
+        // Legal Evidence
+        consentText: LEGAL_DISCLAIMER_TEXT,
+        consentTimestamp: timestamp,
+      });
 
-    setShowDisclaimer(false);
-    navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] });
+      // 2. Update local session (Mapping UID to ID for DemoStore compatibility)
+      demoStore.setUser({
+        ...newUser,
+        id: newUser.uid, // Map Firebase 'uid' to local 'id'
+      });
+
+      // 3. Navigate
+      setShowDisclaimer(false);
+      navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] });
+    } catch (error: any) {
+      Alert.alert("Registration Failed", error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -194,12 +212,7 @@ export default function SignUp({ navigation }: any) {
             <DatePickerField label="Date of Birth" value={field.value} onChange={(v) => setValue('dob', v, { shouldValidate: true })} error={fieldState.error?.message} />
           )} />
 
-          <PhoneField 
-            controlName="phone" 
-            label="Phone Number" 
-            control={control} 
-            error={formState.errors.phone?.message} 
-          />
+          <PhoneField controlName="phone" label="Phone Number" control={control} error={formState.errors.phone?.message} />
 
           <Controller control={control} name="agent" render={({ field, fieldState }) => (
             <AppInput label="Agent Name" icon="business-outline" placeholder="Assigned Agent" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
@@ -265,22 +278,16 @@ export default function SignUp({ navigation }: any) {
                 <Text style={styles.modalTitle}>Terms & Data Consent</Text>
               </View>
               
-              <Text style={styles.modalText}>
-                <Text style={{ fontWeight: 'bold', color: '#fff' }}>By using the Bond App,</Text> you expressly consent to the collection, storage, and processing of the personal information provided, including your real-time location, personal identification, and emergency contact details.
-              </Text>
-              
-              <Text style={styles.modalText}>
-                You grant the Bond App permission to access and utilize your device's <Text style={{ fontWeight: 'bold', color: '#fff' }}>geolocation data</Text> solely for the purpose of deploying emergency assistance and facilitating rapid response services.
-              </Text>
-
-              <Text style={styles.modalText}>
-                You understand that this data may be transmitted to your designated emergency contacts and/or safety agents in the event of a panic alert. Your data will be handled in strict accordance with applicable United States privacy laws and will not be used for unauthorized commercial purposes.
-              </Text>
+              <Text style={styles.modalText}>{LEGAL_DISCLAIMER_TEXT}</Text>
 
               <View style={{ height: 20 }} />
               
-              <AppButton title="I Agree & Create Account" onPress={onConsent} />
-              <AppButton title="Cancel" onPress={() => setShowDisclaimer(false)} variant="ghost" />
+              <AppButton 
+                title={isLoading ? "Registering..." : "I Agree & Create Account"} 
+                onPress={onConsent} 
+                disabled={isLoading} 
+              />
+              <AppButton title="Cancel" onPress={() => setShowDisclaimer(false)} variant="ghost" disabled={isLoading} />
             </ScrollView>
           </View>
         </View>
@@ -290,6 +297,7 @@ export default function SignUp({ navigation }: any) {
   );
 }
 
+/*Styles*/
 const styles = StyleSheet.create({
   header: { width: '100%', marginBottom: 20, marginTop: 10, flexDirection: 'row', alignItems: 'center' },
   backBtn: { padding: 8, marginRight: 8, borderRadius: 999, backgroundColor: '#1A2018' },
