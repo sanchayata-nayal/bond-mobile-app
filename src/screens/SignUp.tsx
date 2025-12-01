@@ -53,6 +53,7 @@ const parseDate = (str: string) => {
 const schema = yup.object({
   firstName: yup.string().required('First name is required'),
   lastName: yup.string().required('Last name is required'),
+  email: yup.string().email('Invalid email format').required('Email is required'), // Added Email
   dob: yup
     .string()
     .required('Date of birth required')
@@ -88,7 +89,7 @@ const schema = yup.object({
   ec3Phone: yup.string().required('Contact 3 phone required').matches(/^\d{10}$/, 'Must be 10 digits'),
 }).required();
 
-/* FIX: PhoneField Outside Render */
+/* PhoneField Helper */
 const PhoneField = ({ controlName, label, control, error }: any) => (
   <View style={{ marginBottom: 2 }}>
     {label && <Text style={styles.label}>{label}</Text>}
@@ -129,7 +130,7 @@ export default function SignUp({ navigation }: any) {
 
   const { control, handleSubmit, formState, setValue } = useForm({
     defaultValues: {
-      firstName: '', lastName: '', dob: '', phone: '', password: '', agent: '',
+      firstName: '', lastName: '', email: '', dob: '', phone: '', password: '', agent: '',
       ec1Name: '', ec1Phone: '', ec2Name: '', ec2Phone: '', ec3Name: '', ec3Phone: '',
     },
     resolver: yupResolver(schema),
@@ -145,11 +146,11 @@ export default function SignUp({ navigation }: any) {
     if (!formData) return;
     setIsLoading(true);
     
-    // Capture the exact moment of consent
+    // Capture consent timestamp
     const timestamp = new Date().toISOString();
 
     try {
-      // 1. Create User in Firebase
+      // 1. Create User in Firebase (Uses formData.email and formData.password)
       const newUser = await firebaseStore.registerUser({
         ...formData,
         phone: `+1${formData.phone}`,
@@ -161,17 +162,19 @@ export default function SignUp({ navigation }: any) {
         consentTimestamp: timestamp,
       });
 
-      // 2. Update local session (Mapping UID to ID for DemoStore compatibility)
+      // 2. Update local session 
       demoStore.setUser({
         ...newUser,
-        id: newUser.uid, // Map Firebase 'uid' to local 'id'
+        id: newUser.uid,
       });
 
       // 3. Navigate
       setShowDisclaimer(false);
       navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] });
     } catch (error: any) {
-      Alert.alert("Registration Failed", error.message);
+      let msg = error.message;
+      if (msg.includes('email-already-in-use')) msg = 'This email is already registered.';
+      Alert.alert("Registration Failed", msg);
     } finally {
       setIsLoading(false);
     }
@@ -195,6 +198,7 @@ export default function SignUp({ navigation }: any) {
           
           <Text style={styles.sectionTitle}>Personal Details</Text>
           
+          {/* Name Row */}
           <View style={styles.row}>
             <View style={{ flex: 1, marginRight: 8 }}>
               <Controller control={control} name="firstName" render={({ field, fieldState }) => (
@@ -207,6 +211,19 @@ export default function SignUp({ navigation }: any) {
               )} />
             </View>
           </View>
+
+          {/* Email Field (Added) */}
+          <Controller control={control} name="email" render={({ field, fieldState }) => (
+            <AppInput 
+              label="Email Address" 
+              placeholder="jane@example.com" 
+              value={field.value} 
+              onChangeText={field.onChange} 
+              error={fieldState.error?.message}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          )} />
 
           <Controller control={control} name="dob" render={({ field, fieldState }) => (
             <DatePickerField label="Date of Birth" value={field.value} onChange={(v) => setValue('dob', v, { shouldValidate: true })} error={fieldState.error?.message} />
