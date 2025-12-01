@@ -20,13 +20,13 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import PhoneInput from '../components/PhoneInput';
 import { useForm, Controller } from 'react-hook-form';
 import { demoStore } from '../services/demoStore';
-import { firebaseStore } from '../services/firebaseStore'; // <--- IMPORT
+import { firebaseStore } from '../services/firebaseStore'; // <--- IMPORT FIREBASE
 import { COLORS, LAYOUT } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
 
-/* ---------- MOCK DATA (For Forgot Password Verify only for now) ---------- */
+/* ---------- MOCK DATA (Kept for Forgot Password Logic only) ---------- */
 const MOCK_USER = {
   id: 'test-user-001',
   firstName: 'John',
@@ -127,7 +127,7 @@ export default function Login({ navigation }: any) {
 
   /* --- HANDLERS --- */
   const onLogin = async (data: any) => {
-    // ADMIN BACKDOOR
+    // ADMIN BACKDOOR (Optional: Keep for your testing)
     if (data.email.toLowerCase() === 'admin@bond.com' && data.password === 'admin123') {
       navigation.reset({ index: 0, routes: [{ name: 'AdminLanding' }] });
       return;
@@ -135,17 +135,25 @@ export default function Login({ navigation }: any) {
 
     setIsLoading(true);
     try {
-      // REAL FIREBASE LOGIN
+      // 1. Authenticate with Firebase
       const userProfile = await firebaseStore.loginUser(data.email, data.password);
       
-      // Update local session
-      demoStore.setUser(userProfile);
+      // 2. Map Firebase 'uid' to local 'id' to fix Type Error
+      const localUser = {
+        ...userProfile,
+        id: userProfile.uid 
+      };
+
+      // 3. Update local session
+      demoStore.setUser(localUser);
       
+      // 4. Navigate
       navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] });
     } catch (error: any) {
-      // Clean up error message
       let msg = error.message;
       if (msg.includes('auth/invalid-credential')) msg = 'Invalid email or password.';
+      if (msg.includes('auth/user-not-found')) msg = 'User not found.';
+      if (msg.includes('auth/wrong-password')) msg = 'Incorrect password.';
       showAlert('Login Failed', msg, 'error');
     } finally {
       setIsLoading(false);
@@ -153,8 +161,9 @@ export default function Login({ navigation }: any) {
   };
 
   const onVerifyIdentity = (data: any) => {
-    // NOTE: In a real "no-backend" setup, verify against mock or implement a client-side query
-    // For now, we keep the mock check to allow you to test the UI flow.
+    // NOTE: This currently uses MOCK data for the logic check. 
+    // Implementing real Firestore query for this specific check requires indexing.
+    // For now, this is a UI simulation.
     const isValid = 
       (data.email.toLowerCase() === MOCK_USER.email || true) && 
       data.agent.trim().toLowerCase() === MOCK_USER.agent.toLowerCase() &&
@@ -341,7 +350,9 @@ const styles = StyleSheet.create({
   footerText: { color: COLORS.textSecondary, fontSize: 14 },
   link: { color: COLORS.accent, fontWeight: 'bold', fontSize: 14 },
   label: { color: COLORS.textSecondary, marginBottom: 8, fontSize: 13 },
-  
+  err: { color: COLORS.error, marginTop: 6, fontSize: 12 },
+
+  /* Modal Styles */
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalCard: { 
     backgroundColor: '#141812', padding: 24, borderRadius: 24, width: '100%', maxWidth: 420, 
@@ -356,5 +367,4 @@ const styles = StyleSheet.create({
     borderRadius: LAYOUT.borderRadius, borderWidth: 1, borderColor: '#2A3028', height: LAYOUT.controlHeight 
   },
   simpleInput: { flex: 1, color: COLORS.textPrimary, paddingHorizontal: 12, fontSize: 16, height: '100%' },
-  err: { color: COLORS.error, marginTop: 6, fontSize: 12 },
 });
