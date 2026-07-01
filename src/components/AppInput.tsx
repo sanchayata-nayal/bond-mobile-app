@@ -13,7 +13,16 @@ type Props = {
   [k: string]: any;
 };
 
-export default function AppInput({ label, error, style, onFocus, onBlur, icon, ...rest }: Props) {
+export default function AppInput({
+  label,
+  error,
+  style,
+  onFocus,
+  onBlur,
+  icon,
+  editable = true,
+  ...rest
+}: Props) {
   const anim = useRef(new Animated.Value(0)).current;
 
   const handleFocus = (e: any) => {
@@ -33,11 +42,26 @@ export default function AppInput({ label, error, style, onFocus, onBlur, icon, .
   return (
     <View style={[style, styles.wrapperOuter]}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <Animated.View style={[styles.wrapper, { borderColor }, error ? styles.inputError : null]}>
-        {icon ? <Ionicons name={icon as any} size={20} color={COLORS.textSecondary} style={{ marginLeft: 12 }} /> : null}
+      <Animated.View
+        style={[
+          styles.wrapper,
+          { borderColor },
+          !editable ? styles.disabledWrapper : null,
+          error ? styles.inputError : null,
+        ]}
+      >
+        {icon ? (
+          <Ionicons
+            name={icon as any}
+            size={20}
+            color={COLORS.textSecondary}
+            style={{ marginLeft: 12 }}
+          />
+        ) : null}
         <TextInput
           {...rest}
-          style={[styles.input]}
+          editable={editable}
+          style={[styles.input, !editable ? styles.inputDisabled : null]}
           placeholderTextColor="#7A7A7A"
           onFocus={handleFocus}
           onBlur={handleBlur}
@@ -66,6 +90,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     color: COLORS.textPrimary,
     fontSize: 16,
+  },
+  disabledWrapper: {
+    backgroundColor: '#141812',
+    borderColor: '#2A3028',
+  },
+  inputDisabled: {
+    color: COLORS.textSecondary,
   },
   err: { color: COLORS.error, marginTop: 6, fontSize: 12 },
   inputError: { borderColor: COLORS.error },

@@ -14,6 +14,7 @@ import {
 import ScreenContainer from '../components/ScreenContainer';
 import AppInput from '../components/AppInput';
 import PasswordInput from '../components/PasswordInput';
+import AgentSelect from '../components/AgentSelect';
 import AppButton from '../components/AppButton';
 import DatePickerField from '../components/DatePickerField';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -25,6 +26,7 @@ import { COLORS, LAYOUT } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
+import { EMAIL_ERROR, EMAIL_REGEX } from '../utils/validation';
 
 /* ---------- MOCK DATA (Kept for Forgot Password Logic only) ---------- */
 const MOCK_USER = {
@@ -40,22 +42,38 @@ const MOCK_USER = {
 /* ---------- SCHEMAS ---------- */
 const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/;
 const PASSWORD_ERROR = 'Min 6 chars, letters & numbers required';
+const emailRule = (requiredMessage: string) =>
+  yup
+    .string()
+    .trim()
+    .lowercase()
+    .required(requiredMessage)
+    .matches(EMAIL_REGEX, { message: EMAIL_ERROR, excludeEmptyString: true });
 
-const loginSchema = yup.object({
-  email: yup.string().email('Please enter a valid email').required('Email required'),
-  password: yup.string().required('Password required').matches(PASSWORD_REGEX, PASSWORD_ERROR),
-}).required();
+const loginSchema = yup
+  .object({
+    email: emailRule('Email required'),
+    password: yup.string().required('Password required').matches(PASSWORD_REGEX, PASSWORD_ERROR),
+  })
+  .required();
 
-const forgotIdentitySchema = yup.object({
-  email: yup.string().email('Invalid email format').required('Required'),
-  phone: yup.string().required('Required').matches(/^\d{10}$/, '10 digits required'),
-  dob: yup.string().required('Required'),
-  agent: yup.string().required('Required'),
-}).required();
+const forgotIdentitySchema = yup
+  .object({
+    email: emailRule('Required'),
+    phone: yup
+      .string()
+      .required('Required')
+      .matches(/^\d{10}$/, '10 digits required'),
+    dob: yup.string().required('Required'),
+    agent: yup.string().required('Required'),
+  })
+  .required();
 
-const forgotResetSchema = yup.object({
-  newPassword: yup.string().required('Required').matches(PASSWORD_REGEX, PASSWORD_ERROR),
-}).required();
+const forgotResetSchema = yup
+  .object({
+    newPassword: yup.string().required('Required').matches(PASSWORD_REGEX, PASSWORD_ERROR),
+  })
+  .required();
 
 /* ---------- SIMPLE LOCAL INPUT (FAILSAFE) ---------- */
 const SimpleResetInput = ({ value, onChangeText, placeholder, error, autoFocus }: any) => {
@@ -87,34 +105,43 @@ export default function Login({ navigation }: any) {
   const { control, handleSubmit, formState } = useForm({
     defaultValues: { email: '', password: '' },
     resolver: yupResolver(loginSchema),
-    mode: 'onChange'
+    mode: 'onChange',
   });
 
   /* --- STATE --- */
   const [forgotVisible, setForgotVisible] = useState(false);
   const [resetStep, setResetStep] = useState<1 | 2>(1);
   const [isLoading, setIsLoading] = useState(false);
-  const [alertConfig, setAlertConfig] = useState<{visible: boolean, title: string, message: string, type: 'success' | 'error'}>({
-    visible: false, title: '', message: '', type: 'error'
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'error',
   });
+  const agentOptions = demoStore.getAgentNames(MOCK_USER.agent);
 
   /* --- FORGOT FORMS --- */
-  const { 
-    control: identityControl, 
-    handleSubmit: handleIdentitySubmit, 
+  const {
+    control: identityControl,
+    handleSubmit: handleIdentitySubmit,
     formState: identityState,
-    reset: resetIdentity
+    reset: resetIdentity,
   } = useForm({
     defaultValues: { email: '', phone: '', dob: '', agent: '' },
     resolver: yupResolver(forgotIdentitySchema),
     mode: 'onChange',
   });
 
-  const { 
-    control: resetControl, 
-    handleSubmit: handleResetSubmit, 
+  const {
+    control: resetControl,
+    handleSubmit: handleResetSubmit,
     formState: resetState,
-    reset: resetFinal
+    reset: resetFinal,
   } = useForm({
     defaultValues: { newPassword: '' },
     resolver: yupResolver(forgotResetSchema),
@@ -137,16 +164,16 @@ export default function Login({ navigation }: any) {
     try {
       // 1. Authenticate with Firebase
       const userProfile = await firebaseStore.loginUser(data.email, data.password);
-      
+
       // 2. Map Firebase 'uid' to local 'id' to fix Type Error
       const localUser = {
         ...userProfile,
-        id: userProfile.uid 
+        id: userProfile.uid,
       };
 
       // 3. Update local session
       demoStore.setUser(localUser);
-      
+
       // 4. Navigate
       navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] });
     } catch (error: any) {
@@ -161,11 +188,11 @@ export default function Login({ navigation }: any) {
   };
 
   const onVerifyIdentity = (data: any) => {
-    // NOTE: This currently uses MOCK data for the logic check. 
+    // NOTE: This currently uses MOCK data for the logic check.
     // Implementing real Firestore query for this specific check requires indexing.
     // For now, this is a UI simulation.
-    const isValid = 
-      (data.email.toLowerCase() === MOCK_USER.email || true) && 
+    const isValid =
+      (data.email.toLowerCase() === MOCK_USER.email || true) &&
       data.agent.trim().toLowerCase() === MOCK_USER.agent.toLowerCase() &&
       (data.dob === MOCK_USER.dob || data.dob === '05/15/1985') &&
       (data.phone === MOCK_USER.phone.replace('+1', '') || data.phone === '5615550100');
@@ -197,8 +224,8 @@ export default function Login({ navigation }: any) {
 
   return (
     <ScreenContainer scrollable={false}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.container}
       >
         <View style={styles.header}>
@@ -210,28 +237,36 @@ export default function Login({ navigation }: any) {
         </View>
 
         <View style={styles.form}>
-          <Controller control={control} name="email" render={({ field, fieldState }) => (
-            <AppInput 
-              label="Email Address" 
-              placeholder="Enter your email" 
-              icon="mail-outline" 
-              value={field.value} 
-              onChangeText={field.onChange} 
-              error={fieldState.error?.message} 
-              autoCapitalize="none" 
-              keyboardType="email-address" 
-            />
-          )} />
+          <Controller
+            control={control}
+            name="email"
+            render={({ field, fieldState }) => (
+              <AppInput
+                label="Email Address"
+                placeholder="Enter your email"
+                icon="mail-outline"
+                value={field.value}
+                onChangeText={field.onChange}
+                error={fieldState.error?.message}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+            )}
+          />
 
-          <Controller control={control} name="password" render={({ field, fieldState }) => (
-            <PasswordInput 
-              label="Password" 
-              placeholder="Enter password" 
-              value={field.value} 
-              onChangeText={field.onChange} 
-              error={fieldState.error?.message} 
-            />
-          )} />
+          <Controller
+            control={control}
+            name="password"
+            render={({ field, fieldState }) => (
+              <PasswordInput
+                label="Password"
+                placeholder="Enter password"
+                value={field.value}
+                onChangeText={field.onChange}
+                error={fieldState.error?.message}
+              />
+            )}
+          />
 
           <TouchableOpacity style={styles.forgotBtn} onPress={() => setForgotVisible(true)}>
             <Text style={styles.forgotText}>Forgot Password?</Text>
@@ -239,10 +274,10 @@ export default function Login({ navigation }: any) {
 
           <View style={{ height: 24 }} />
 
-          <AppButton 
-            title={isLoading ? "Logging in..." : "Login"} 
-            onPress={handleSubmit(onLogin)} 
-            disabled={!formState.isValid || isLoading} 
+          <AppButton
+            title={isLoading ? 'Logging in...' : 'Login'}
+            onPress={handleSubmit(onLogin)}
+            disabled={!formState.isValid || isLoading}
           />
 
           <View style={styles.footer}>
@@ -258,64 +293,117 @@ export default function Login({ navigation }: any) {
       <Modal visible={forgotVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            
             {resetStep === 1 ? (
-              <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <ScrollView
+                style={{ width: '100%' }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
                 <Text style={styles.modalTitle}>Recover Account</Text>
                 <Text style={styles.modalSub}>Enter your details to verify identity.</Text>
 
-                <Controller control={identityControl} name="email" render={({ field, fieldState }) => (
-                  <AppInput label="Email" placeholder="Enter email" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
-                )} />
-                
-                <Controller control={identityControl} name="phone" render={({ field, fieldState }) => (
-                  <View style={{ marginBottom: 14 }}>
-                    <Text style={styles.label}>Phone Number</Text>
-                    <PhoneInput 
-                      value={field.value} 
-                      onChange={field.onChange} 
-                      countryCode="+1" 
-                      placeholder="1234567890"
+                <Controller
+                  control={identityControl}
+                  name="email"
+                  render={({ field, fieldState }) => (
+                    <AppInput
+                      label="Email"
+                      placeholder="Enter email"
+                      value={field.value}
+                      onChangeText={field.onChange}
                       error={fieldState.error?.message}
                     />
-                  </View>
-                )} />
+                  )}
+                />
 
-                <Controller control={identityControl} name="agent" render={({ field, fieldState }) => (
-                  <AppInput label="Agent Name" placeholder="Enter Agent Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
-                )} />
+                <Controller
+                  control={identityControl}
+                  name="phone"
+                  render={({ field, fieldState }) => (
+                    <View style={{ marginBottom: 14 }}>
+                      <Text style={styles.label}>Phone Number</Text>
+                      <PhoneInput
+                        value={field.value}
+                        onChange={field.onChange}
+                        countryCode="+1"
+                        placeholder="1234567890"
+                        error={fieldState.error?.message}
+                      />
+                    </View>
+                  )}
+                />
 
-                <Controller control={identityControl} name="dob" render={({ field, fieldState }) => (
-                  <DatePickerField label="Date of Birth" value={field.value} onChange={field.onChange} placeholder="MM/DD/YYYY" error={fieldState.error?.message} />
-                )} />
+                <Controller
+                  control={identityControl}
+                  name="agent"
+                  render={({ field, fieldState }) => (
+                    <AgentSelect
+                      label="Agent Name"
+                      placeholder="Select agent"
+                      value={field.value}
+                      onChange={field.onChange}
+                      options={agentOptions}
+                      error={fieldState.error?.message}
+                    />
+                  )}
+                />
+
+                <Controller
+                  control={identityControl}
+                  name="dob"
+                  render={({ field, fieldState }) => (
+                    <DatePickerField
+                      label="Date of Birth"
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="MM/DD/YYYY"
+                      error={fieldState.error?.message}
+                    />
+                  )}
+                />
 
                 <View style={{ marginTop: 10 }}>
-                  <AppButton title="Verify Identity" onPress={handleIdentitySubmit(onVerifyIdentity)} disabled={!identityState.isValid} />
+                  <AppButton
+                    title="Verify Identity"
+                    onPress={handleIdentitySubmit(onVerifyIdentity)}
+                    disabled={!identityState.isValid}
+                  />
                   <AppButton title="Cancel" onPress={closeForgot} variant="ghost" />
                 </View>
               </ScrollView>
             ) : (
-              <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <ScrollView
+                style={{ width: '100%' }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
                 <Text style={styles.modalTitle}>Set New Password</Text>
                 <Text style={styles.modalSub}>Identity verified. Create a new password.</Text>
 
-                <Controller control={resetControl} name="newPassword" render={({ field, fieldState }) => (
-                  <SimpleResetInput 
-                    placeholder="Min 6 chars (Alpha-numeric)" 
-                    value={field.value} 
-                    onChangeText={field.onChange} 
-                    error={fieldState.error?.message}
-                    autoFocus={true}
-                  />
-                )} />
+                <Controller
+                  control={resetControl}
+                  name="newPassword"
+                  render={({ field, fieldState }) => (
+                    <SimpleResetInput
+                      placeholder="Min 6 chars (Alpha-numeric)"
+                      value={field.value}
+                      onChangeText={field.onChange}
+                      error={fieldState.error?.message}
+                      autoFocus={true}
+                    />
+                  )}
+                />
 
                 <View style={{ marginTop: 10 }}>
-                  <AppButton title="Update Password" onPress={handleResetSubmit(onFinalizeReset)} disabled={!resetState.isValid} />
+                  <AppButton
+                    title="Update Password"
+                    onPress={handleResetSubmit(onFinalizeReset)}
+                    disabled={!resetState.isValid}
+                  />
                   <AppButton title="Cancel" onPress={closeForgot} variant="ghost" />
                 </View>
               </ScrollView>
             )}
-
           </View>
         </View>
       </Modal>
@@ -328,11 +416,10 @@ export default function Login({ navigation }: any) {
         icon={alertConfig.type === 'success' ? 'checkmark-circle' : 'alert-circle'}
         variant={alertConfig.type === 'success' ? 'primary' : 'danger'}
         confirmText="OK"
-        cancelText="" 
-        onConfirm={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
-        onCancel={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+        cancelText=""
+        onConfirm={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
+        onCancel={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
       />
-
     </ScreenContainer>
   );
 }
@@ -340,7 +427,17 @@ export default function Login({ navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, width: '100%', maxWidth: 480, justifyContent: 'center' },
   header: { alignItems: 'center', marginBottom: 40 },
-  iconCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#1A2018', alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#2A3028' },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#1A2018',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#2A3028',
+  },
   title: { color: COLORS.textPrimary, fontSize: 28, fontWeight: '800', marginBottom: 8 },
   subtitle: { color: COLORS.textSecondary, fontSize: 15, textAlign: 'center' },
   form: { width: '100%' },
@@ -353,18 +450,47 @@ const styles = StyleSheet.create({
   err: { color: COLORS.error, marginTop: 6, fontSize: 12 },
 
   /* Modal Styles */
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalCard: { 
-    backgroundColor: '#141812', padding: 24, borderRadius: 24, width: '100%', maxWidth: 420, 
-    borderWidth: 1, borderColor: '#2A3028', maxHeight: '90%' 
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
-  modalTitle: { color: COLORS.textPrimary, fontSize: 22, fontWeight: 'bold', marginBottom: 4, textAlign: 'center' },
+  modalCard: {
+    backgroundColor: '#141812',
+    padding: 24,
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 420,
+    borderWidth: 1,
+    borderColor: '#2A3028',
+    maxHeight: '90%',
+  },
+  modalTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
   modalSub: { color: COLORS.textSecondary, fontSize: 14, marginBottom: 20, textAlign: 'center' },
 
   /* Simple Input Styles */
   simpleWrapper: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0C0E0B', 
-    borderRadius: LAYOUT.borderRadius, borderWidth: 1, borderColor: '#2A3028', height: LAYOUT.controlHeight 
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0C0E0B',
+    borderRadius: LAYOUT.borderRadius,
+    borderWidth: 1,
+    borderColor: '#2A3028',
+    height: LAYOUT.controlHeight,
   },
-  simpleInput: { flex: 1, color: COLORS.textPrimary, paddingHorizontal: 12, fontSize: 16, height: '100%' },
+  simpleInput: {
+    flex: 1,
+    color: COLORS.textPrimary,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    height: '100%',
+  },
 });

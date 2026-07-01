@@ -1,6 +1,14 @@
 // src/components/PasswordInput.tsx
 import React, { useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity, Platform, TextInputProps } from 'react-native';
+import {
+  View,
+  TextInput,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+  TextInputProps,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, LAYOUT } from '../styles/theme';
 
@@ -12,9 +20,15 @@ type Props = TextInputProps & {
   error?: string | null;
 };
 
-export default function PasswordInput({ label, value, onChangeText, placeholder, error, ...rest }: Props) {
-  // Default to true (Visible) as requested
-  const [show, setShow] = useState(true);
+export default function PasswordInput({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  error,
+  ...rest
+}: Props) {
+  const [show, setShow] = useState(false);
 
   return (
     <View style={{ marginBottom: 14 }}>
@@ -28,7 +42,6 @@ export default function PasswordInput({ label, value, onChangeText, placeholder,
           placeholder={placeholder}
           placeholderTextColor="#7A7A7A"
           style={styles.input}
-          
           // Stability props
           autoCapitalize="none"
           autoCorrect={false}
@@ -36,20 +49,15 @@ export default function PasswordInput({ label, value, onChangeText, placeholder,
           textContentType="none"
           importantForAutofill="no"
           autoComplete="off"
-          
           // Android font padding fix
           {...(Platform.OS === 'android' ? { includeFontPadding: false } : {})}
         />
-        <TouchableOpacity 
-          onPress={() => setShow(s => !s)} 
+        <TouchableOpacity
+          onPress={() => setShow((s) => !s)}
           style={styles.eyeBtn}
           activeOpacity={0.7}
         >
-          <Ionicons 
-            name={show ? 'eye' : 'eye-off'} 
-            size={20} 
-            color={COLORS.textSecondary} 
-          />
+          <Ionicons name={show ? 'eye-off' : 'eye'} size={20} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
       {error ? <Text style={styles.err}>{error}</Text> : null}
@@ -59,21 +67,21 @@ export default function PasswordInput({ label, value, onChangeText, placeholder,
 
 const styles = StyleSheet.create({
   label: { color: COLORS.textSecondary, marginBottom: 8, fontSize: 13 },
-  wrapper: { 
-    height: LAYOUT.controlHeight, 
-    borderRadius: LAYOUT.borderRadius, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#0C0E0B', 
-    borderWidth: 1, 
+  wrapper: {
+    height: LAYOUT.controlHeight,
+    borderRadius: LAYOUT.borderRadius,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0C0E0B',
+    borderWidth: 1,
     borderColor: 'transparent',
-    overflow: 'hidden'
+    overflow: 'hidden',
   },
-  input: { 
-    flex: 1, 
-    paddingHorizontal: 12, 
-    color: COLORS.textPrimary, 
-    fontSize: 16, 
+  input: {
+    flex: 1,
+    paddingHorizontal: 12,
+    color: COLORS.textPrimary,
+    fontSize: 16,
     height: '100%',
     fontVariant: ['tabular-nums'],
   },
