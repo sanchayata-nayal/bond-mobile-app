@@ -25,6 +25,7 @@ import { demoStore, User } from '../services/demoStore';
 import { COLORS, LAYOUT } from '../styles/theme';
 import { useForm, Controller } from 'react-hook-form';
 import { Ionicons } from '@expo/vector-icons';
+import { PENDING_AGENT_NAME } from '../utils/agents';
 
 export default function UserDetails({ navigation, route }: any) {
   // If route.params.user exists, we are in Admin View mode
@@ -78,13 +79,17 @@ export default function UserDetails({ navigation, route }: any) {
 
   const handleSave = (data: any) => {
     if (displayUser) {
+      const agent = data.agent;
+      const isPending = agent === PENDING_AGENT_NAME;
       const updatedUser: User = {
         ...displayUser,
         firstName: data.firstName,
         lastName: data.lastName,
         dob: data.dob,
         phone: `+1${data.phone}`,
-        agent: data.agent,
+        agent,
+        requestedAgentName: isPending ? displayUser.requestedAgentName : undefined,
+        agentStatus: isPending ? 'pending' : 'assigned',
         emergencyContacts: [
           { name: data.ec1Name, phone: `+1${data.ec1Phone}` },
           { name: data.ec2Name, phone: `+1${data.ec2Phone}` },
@@ -320,6 +325,9 @@ export default function UserDetails({ navigation, route }: any) {
               <InfoRow label="Phone" value={displayUser?.phone || ''} copyable />
               <InfoRow label="Date of Birth" value={displayUser?.dob || '-'} />
               <InfoRow label="Agent" value={displayUser?.agent || '-'} />
+              {displayUser?.agentStatus === 'pending' && displayUser.requestedAgentName ? (
+                <InfoRow label="Requested Agent" value={displayUser.requestedAgentName} />
+              ) : null}
 
               <View style={styles.divider} />
               <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>Emergency Contacts</Text>

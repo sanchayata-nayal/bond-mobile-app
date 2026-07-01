@@ -1,6 +1,13 @@
 // src/services/demoStore.ts
 
+import { PENDING_AGENT_NAME } from '../utils/agents';
+
 type EmergencyContact = { name: string; phone: string };
+
+export type Agent = {
+  id: string;
+  name: string;
+};
 
 export type User = {
   id: string;
@@ -10,6 +17,8 @@ export type User = {
   phone?: string;
   agent?: string;
   email?: string;
+  requestedAgentName?: string;
+  agentStatus?: 'assigned' | 'pending';
   emergencyContacts?: EmergencyContact[];
   joinedDate?: string;
   panicCount?: number;
@@ -147,12 +156,15 @@ const MOCK_METRICS = {
   allTime: { newSignups: 1450, activeUsers: 890 },
 };
 
-const DEFAULT_AGENT_NAMES = ['Agent Smith', 'Agent Carter', 'Agent Bond'];
-
 const uniqueNames = (names: Array<string | undefined>) =>
   Array.from(new Set(names.map((name) => name?.trim()).filter(Boolean))) as string[];
 
 let _currentUser: User | null = null;
+let _agents: Agent[] = [
+  { id: 'a1', name: 'Agent Smith' },
+  { id: 'a2', name: 'Agent Carter' },
+  { id: 'a3', name: 'Agent Bond' },
+];
 let _primaryAgentNumber = '+15611231234';
 let _smsRecipients = [
   { id: 'r1', name: 'Dispatch Center', phone: '+15619990001' },
@@ -183,13 +195,49 @@ export const demoStore = {
     _smsRecipients = _smsRecipients.filter((r) => r.id !== id);
   },
 
+  getAgents() {
+    return [..._agents];
+  },
+  addAgent(name: string) {
+    const cleanName = name.trim();
+    if (!cleanName) return null;
+
+    const existing = _agents.find((agent) => agent.name.toLowerCase() === cleanName.toLowerCase());
+    if (existing) return existing;
+
+    const newAgent = { id: Math.random().toString(36).substr(2, 9), name: cleanName };
+    _agents.push(newAgent);
+    return newAgent;
+  },
+  removeAgent(id: string) {
+    _agents = _agents.filter((agent) => agent.id !== id);
+  },
   getAgentNames(extraAgent?: string) {
     return uniqueNames([
-      ...DEFAULT_AGENT_NAMES,
-      ...MOCK_DB_USERS.map((user) => user.agent),
-      ..._smsRecipients.map((recipient) => recipient.name),
+      ..._agents.map((agent) => agent.name),
+      ...MOCK_DB_USERS.map((user) =>
+        user.agent && user.agent !== PENDING_AGENT_NAME ? user.agent : undefined,
+      ),
       extraAgent,
     ]);
+  },
+  getPendingAgentRequests() {
+    return MOCK_DB_USERS.filter(
+      (user) => user.agentStatus === 'pending' && user.requestedAgentName,
+    );
+  },
+  assignAgentToUser(userId: string, agentName: string) {
+    const idx = MOCK_DB_USERS.findIndex((user) => user.id === userId);
+    if (idx === -1) return;
+
+    const updatedUser = {
+      ...MOCK_DB_USERS[idx],
+      agent: agentName,
+      requestedAgentName: undefined,
+      agentStatus: 'assigned' as const,
+    };
+    MOCK_DB_USERS[idx] = updatedUser;
+    if (_currentUser && _currentUser.id === userId) _currentUser = updatedUser;
   },
 
   getAllUsers() {
@@ -204,6 +252,7 @@ export const demoStore = {
   updateUser(updatedUser: User) {
     const idx = MOCK_DB_USERS.findIndex((u) => u.id === updatedUser.id);
     if (idx > -1) MOCK_DB_USERS[idx] = updatedUser;
+    else MOCK_DB_USERS.push(updatedUser);
     if (_currentUser && _currentUser.id === updatedUser.id) _currentUser = updatedUser;
   },
 

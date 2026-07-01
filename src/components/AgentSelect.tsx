@@ -8,6 +8,7 @@ type Props = {
   value?: string;
   options: string[];
   onChange: (value: string) => void;
+  optionLabels?: Record<string, string>;
   placeholder?: string;
   error?: string | null;
   style?: ViewStyle | ViewStyle[];
@@ -18,6 +19,7 @@ export default function AgentSelect({
   value,
   options,
   onChange,
+  optionLabels = {},
   placeholder = 'Select agent',
   error,
   style,
@@ -37,6 +39,7 @@ export default function AgentSelect({
     onChange(agent);
     setOpen(false);
   };
+  const getOptionLabel = (agent: string) => optionLabels[agent] || agent;
 
   return (
     <View style={[styles.outer, style]}>
@@ -53,7 +56,7 @@ export default function AgentSelect({
         <View style={styles.triggerLeft}>
           <Ionicons name="business-outline" size={20} color={COLORS.textSecondary} />
           <Text style={[styles.triggerText, !normalizedValue ? styles.placeholder : null]}>
-            {normalizedValue || placeholder}
+            {normalizedValue ? getOptionLabel(normalizedValue) : placeholder}
           </Text>
         </View>
         <Ionicons
@@ -79,7 +82,7 @@ export default function AgentSelect({
                     activeOpacity={0.8}
                   >
                     <Text style={[styles.itemText, active ? styles.itemTextActive : null]}>
-                      {agent}
+                      {getOptionLabel(agent)}
                     </Text>
                     {active ? (
                       <Ionicons name="checkmark-circle" size={18} color={COLORS.background} />

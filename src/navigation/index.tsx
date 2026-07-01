@@ -14,13 +14,14 @@ import AdminLanding from '../screens/AdminLanding';
 import AdminRecipients from '../screens/AdminRecipients';
 import AdminUsers from '../screens/AdminUsers';
 import AdminMetrics from '../screens/AdminMetrics';
+import AdminAgents from '../screens/AdminAgents';
 const Stack = createStackNavigator();
 
 export default function AppStack() {
   return (
-    <Stack.Navigator 
-      initialRouteName="Starting" 
-      screenOptions={{ 
+    <Stack.Navigator
+      initialRouteName="Starting"
+      screenOptions={{
         headerShown: false,
         cardStyle: { backgroundColor: COLORS.background },
         headerStyle: { backgroundColor: COLORS.background, shadowColor: 'transparent' },
@@ -37,6 +38,7 @@ export default function AppStack() {
       {/* Admin */}
       <Stack.Screen name="AdminLanding" component={AdminLanding} />
       <Stack.Screen name="AdminRecipients" component={AdminRecipients} />
+      <Stack.Screen name="AdminAgents" component={AdminAgents} />
       <Stack.Screen name="AdminUsers" component={AdminUsers} />
       <Stack.Screen name="AdminMetrics" component={AdminMetrics} />
     </Stack.Navigator>

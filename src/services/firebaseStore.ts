@@ -1,21 +1,21 @@
 // src/services/firebaseStore.ts
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   signOut,
-  updatePassword 
+  updatePassword,
 } from 'firebase/auth';
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
-  updateDoc, 
-  collection, 
-  addDoc, 
-  getDocs, 
-  query, 
-  orderBy, 
-  deleteDoc 
+import {
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  orderBy,
+  deleteDoc,
 } from 'firebase/firestore';
 import { auth, db } from '../config/firebaseConfig';
 
@@ -30,9 +30,11 @@ export type UserProfile = {
   phone: string;
   dob: string;
   agent: string;
+  requestedAgentName?: string;
+  agentStatus?: 'assigned' | 'pending';
   emergencyContacts: EmergencyContact[];
   role: 'user' | 'admin';
-  joinedAt: string;      // ISO Date
+  joinedAt: string; // ISO Date
   panicCount: number;
   // Legal Consent Fields
   consentGiven: boolean;
@@ -48,7 +50,6 @@ export type Recipient = {
 
 /* --- THE SERVICE --- */
 export const firebaseStore = {
-  
   // --- AUTHENTICATION ---
 
   // 1. Sign Up (Auth + Firestore Profile)
@@ -67,6 +68,8 @@ export const firebaseStore = {
         phone: data.phone,
         dob: data.dob,
         agent: data.agent,
+        requestedAgentName: data.requestedAgentName || '',
+        agentStatus: data.agentStatus || 'assigned',
         emergencyContacts: [
           { name: data.ec1Name, phone: data.ec1Phone },
           { name: data.ec2Name, phone: data.ec2Phone },
@@ -83,7 +86,7 @@ export const firebaseStore = {
 
       // C. Save to Firestore 'users' collection
       await setDoc(doc(db, 'users', uid), newProfile);
-      
+
       return newProfile;
     } catch (error: any) {
       throw new Error(error.message);
@@ -95,7 +98,7 @@ export const firebaseStore = {
     try {
       const cred = await signInWithEmailAndPassword(auth, email, pass);
       const uid = cred.user.uid;
-      
+
       // Fetch Profile
       const docRef = doc(db, 'users', uid);
       const docSnap = await getDoc(docRef);
@@ -132,10 +135,10 @@ export const firebaseStore = {
       // Increment User's Panic Count
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
-        panicCount: (user.panicCount || 0) + 1
+        panicCount: (user.panicCount || 0) + 1,
       });
     } catch (e) {
-      console.error("Panic Log Error", e);
+      console.error('Panic Log Error', e);
     }
   },
 
@@ -172,13 +175,13 @@ export const firebaseStore = {
     const settings = await this.getAdminSettings();
     const newRecipient = { id: Date.now().toString(), name, phone };
     const newList = [...settings.smsList, newRecipient];
-    
+
     await updateDoc(doc(db, 'config', 'global'), { smsList: newList });
   },
 
   async removeRecipient(id: string) {
     const settings = await this.getAdminSettings();
-    const newList = settings.smsList.filter(r => r.id !== id);
+    const newList = settings.smsList.filter((r) => r.id !== id);
     await updateDoc(doc(db, 'config', 'global'), { smsList: newList });
   },
 
@@ -190,12 +193,12 @@ export const firebaseStore = {
   async fetchAllUsers() {
     const q = query(collection(db, 'users'));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(d => d.data() as UserProfile);
+    return querySnapshot.docs.map((d) => d.data() as UserProfile);
   },
 
   async fetchPanicLogs() {
     const q = query(collection(db, 'panic_logs'), orderBy('timestamp', 'desc'));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-  }
+    return querySnapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  },
 };

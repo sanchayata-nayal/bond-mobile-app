@@ -28,6 +28,11 @@ import { demoStore } from '../services/demoStore';
 import { firebaseStore } from '../services/firebaseStore';
 import { COLORS, LAYOUT } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  AGENT_NOT_LISTED_LABEL,
+  AGENT_NOT_LISTED_VALUE,
+  PENDING_AGENT_NAME,
+} from '../utils/agents';
 import { EMAIL_ERROR, EMAIL_REGEX } from '../utils/validation';
 
 /* ---------- CONSTANTS ---------- */
@@ -89,6 +94,16 @@ const schema = yup
       .min(6, 'Min 6 characters')
       .matches(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/, 'Alphanumeric (letters + numbers)'),
     agent: yup.string().required('Agent name required'),
+    requestedAgentName: yup
+      .string()
+      .trim()
+      .test(
+        'required-when-agent-missing',
+        'Enter the agent name for admin review',
+        function (value) {
+          return this.parent.agent !== AGENT_NOT_LISTED_VALUE || !!value?.trim();
+        },
+      ),
 
     ec1Name: yup.string().required('Contact 1 name required'),
     ec1Phone: yup
@@ -137,7 +152,7 @@ export default function SignUp({ navigation }: any) {
   const [isLoading, setIsLoading] = useState(false);
 
   const [formData, setFormData] = useState<any>(null);
-  const agentOptions = demoStore.getAgentNames();
+  const agentOptions = [...demoStore.getAgentNames(), AGENT_NOT_LISTED_VALUE];
 
   const isTabletOrWeb = width > 600;
   const formWidth = isTabletOrWeb ? 500 : '100%';
@@ -150,7 +165,7 @@ export default function SignUp({ navigation }: any) {
     }).start();
   }, []);
 
-  const { control, handleSubmit, formState, setValue } = useForm({
+  const { control, handleSubmit, formState, setValue, watch } = useForm({
     defaultValues: {
       firstName: '',
       lastName: '',
@@ -159,6 +174,7 @@ export default function SignUp({ navigation }: any) {
       phone: '',
       password: '',
       agent: '',
+      requestedAgentName: '',
       ec1Name: '',
       ec1Phone: '',
       ec2Name: '',
@@ -169,6 +185,7 @@ export default function SignUp({ navigation }: any) {
     resolver: yupResolver(schema),
     mode: 'onChange',
   });
+  const selectedAgent = watch('agent');
 
   const onPreSubmit = (data: any) => {
     setFormData(data);
@@ -181,11 +198,17 @@ export default function SignUp({ navigation }: any) {
 
     // Capture consent timestamp
     const timestamp = new Date().toISOString();
+    const isAgentMissing = formData.agent === AGENT_NOT_LISTED_VALUE;
+    const requestedAgentName = isAgentMissing ? formData.requestedAgentName.trim() : '';
+    const agent = isAgentMissing ? PENDING_AGENT_NAME : formData.agent;
 
     try {
       // 1. Create User in Firebase (Uses formData.email and formData.password)
       const newUser = await firebaseStore.registerUser({
         ...formData,
+        agent,
+        requestedAgentName,
+        agentStatus: isAgentMissing ? 'pending' : 'assigned',
         phone: `+1${formData.phone}`,
         ec1Phone: `+1${formData.ec1Phone}`,
         ec2Phone: `+1${formData.ec2Phone}`,
@@ -196,10 +219,13 @@ export default function SignUp({ navigation }: any) {
       });
 
       // 2. Update local session
-      demoStore.setUser({
+      const localUser = {
         ...newUser,
         id: newUser.uid,
-      });
+        joinedDate: newUser.joinedAt?.split('T')[0],
+      };
+      demoStore.setUser(localUser);
+      demoStore.updateUser(localUser);
 
       // 3. Navigate
       setShowDisclaimer(false);
@@ -335,10 +361,28 @@ export default function SignUp({ navigation }: any) {
                   value={field.value}
                   onChange={field.onChange}
                   options={agentOptions}
+                  optionLabels={{ [AGENT_NOT_LISTED_VALUE]: AGENT_NOT_LISTED_LABEL }}
                   error={fieldState.error?.message}
                 />
               )}
             />
+
+            {selectedAgent === AGENT_NOT_LISTED_VALUE && (
+              <Controller
+                control={control}
+                name="requestedAgentName"
+                render={({ field, fieldState }) => (
+                  <AppInput
+                    label="Requested Agent Name"
+                    placeholder="Enter agent name"
+                    value={field.value}
+                    onChangeText={field.onChange}
+                    error={fieldState.error?.message}
+                    autoCapitalize="words"
+                  />
+                )}
+              />
+            )}
 
             <View style={styles.divider} />
 
