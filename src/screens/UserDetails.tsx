@@ -21,7 +21,8 @@ import AppButton from '../components/AppButton';
 import DatePickerField from '../components/DatePickerField';
 import Collapsible from '../components/Collapsible';
 import ConfirmationModal from '../components/ConfirmationModal';
-import { demoStore, User } from '../services/demoStore';
+import { AppUser, firebaseStore } from '../services/firebaseStore';
+import { sessionStore } from '../services/sessionStore';
 import { COLORS, LAYOUT } from '../styles/theme';
 import { useForm, Controller } from 'react-hook-form';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,8 +30,8 @@ import { PENDING_AGENT_NAME } from '../utils/agents';
 
 export default function UserDetails({ navigation, route }: any) {
   // If route.params.user exists, we are in Admin View mode
-  const paramUser = route.params?.user as User | undefined;
-  const currentUser = demoStore.getUser();
+  const paramUser = route.params?.user as AppUser | undefined;
+  const currentUser = sessionStore.getUser();
 
   // Effective user to display (Admin param OR logged in user)
   const displayUser = paramUser || currentUser;
@@ -40,7 +41,7 @@ export default function UserDetails({ navigation, route }: any) {
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
   const [successVisible, setSuccessVisible] = useState(false);
-  const agentOptions = demoStore.getAgentNames(displayUser?.agent);
+  const [agentOptions, setAgentOptions] = useState<string[]>([]);
 
   const { control, handleSubmit, reset } = useForm({
     defaultValues: {
@@ -77,12 +78,27 @@ export default function UserDetails({ navigation, route }: any) {
     }
   }, [displayUser]);
 
-  const handleSave = (data: any) => {
+  useEffect(() => {
+    let mounted = true;
+    firebaseStore
+      .fetchAgentNames(displayUser?.agent)
+      .then((names) => {
+        if (mounted) setAgentOptions(names);
+      })
+      .catch(() => {
+        if (mounted) setAgentOptions(displayUser?.agent ? [displayUser.agent] : []);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [displayUser?.agent]);
+
+  const handleSave = async (data: any) => {
     if (displayUser) {
       const agent = data.agent;
       const isPending = agent === PENDING_AGENT_NAME;
-      const updatedUser: User = {
-        ...displayUser,
+      const updatedUser = await firebaseStore.updateUserProfile(displayUser.id, {
         firstName: data.firstName,
         lastName: data.lastName,
         dob: data.dob,
@@ -95,10 +111,11 @@ export default function UserDetails({ navigation, route }: any) {
           { name: data.ec2Name, phone: `+1${data.ec2Phone}` },
           { name: data.ec3Name, phone: `+1${data.ec3Phone}` },
         ],
-      };
+      });
 
-      // Save to store (works for both Admin update and Self update)
-      demoStore.updateUser(updatedUser);
+      if (!isAdminMode) {
+        sessionStore.updateUser(updatedUser);
+      }
 
       setIsEditing(false);
       setSuccessVisible(true);
@@ -114,14 +131,15 @@ export default function UserDetails({ navigation, route }: any) {
     }
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (displayUser) {
-      demoStore.deleteUser(displayUser.id);
+      await firebaseStore.deleteAccount(displayUser.id);
 
       if (isAdminMode) {
         navigation.goBack(); // Go back to list
       } else {
-        demoStore.clear();
+        firebaseStore.logout().catch(() => {});
+        sessionStore.clear();
         navigation.reset({ index: 0, routes: [{ name: 'Starting' }] });
       }
     }
@@ -395,7 +413,8 @@ export default function UserDetails({ navigation, route }: any) {
         message="Are you sure?"
         onConfirm={() => {
           setLogoutVisible(false);
-          demoStore.clear();
+          firebaseStore.logout().catch(() => {});
+          sessionStore.clear();
           navigation.reset({ index: 0, routes: [{ name: 'Starting' }] });
         }}
         onCancel={() => setLogoutVisible(false)}

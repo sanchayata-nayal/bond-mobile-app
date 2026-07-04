@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, TextInput, Platform } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import DashboardHeader from '../components/DashboardHeader';
-import { demoStore, PanicLog, User } from '../services/demoStore';
+import { AppUser, firebaseStore, PanicLog } from '../services/firebaseStore';
 import { COLORS } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -85,7 +85,7 @@ const RecentLogItem = ({ item }: { item: PanicLog }) => (
   </View>
 );
 
-const TopUserRow = ({ user, rank }: { user: User, rank: number }) => (
+const TopUserRow = ({ user, rank }: { user: AppUser, rank: number }) => (
   <View style={styles.userRow}>
     <View style={styles.rankBadge}>
       <Text style={styles.rankText}>{rank}</Text>
@@ -110,7 +110,7 @@ export default function AdminMetrics({ navigation }: any) {
   const [data, setData] = useState<{
     newSignups: number;
     activeUsers: number;
-    topUsers: User[];
+    topUsers: AppUser[];
     recentLogs: PanicLog[];
   } | null>(null);
   
@@ -122,9 +122,12 @@ export default function AdminMetrics({ navigation }: any) {
 
   const loadData = async () => {
     setLoading(true);
-    const res = await demoStore.fetchMetrics(period);
-    setData(res);
-    setLoading(false);
+    try {
+      const res = await firebaseStore.fetchMetrics(period);
+      setData(res);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Filter Logs

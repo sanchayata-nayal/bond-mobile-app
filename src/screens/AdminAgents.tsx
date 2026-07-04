@@ -16,33 +16,40 @@ import AppButton from '../components/AppButton';
 import AppInput from '../components/AppInput';
 import AgentSelect from '../components/AgentSelect';
 import ConfirmationModal from '../components/ConfirmationModal';
-import { Agent, demoStore, User } from '../services/demoStore';
+import { Agent, AppUser, firebaseStore } from '../services/firebaseStore';
 import { COLORS } from '../styles/theme';
 
 export default function AdminAgents({ navigation }: any) {
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [requests, setRequests] = useState<User[]>([]);
+  const [requests, setRequests] = useState<AppUser[]>([]);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [mapModalVisible, setMapModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [newAgentName, setNewAgentName] = useState('');
   const [selectedAgent, setSelectedAgent] = useState('');
-  const [selectedRequest, setSelectedRequest] = useState<User | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<AppUser | null>(null);
   const [agentToDelete, setAgentToDelete] = useState<Agent | null>(null);
 
-  const refreshData = () => {
-    const nextAgents = demoStore.getAgents();
-    setAgents(nextAgents);
-    setRequests(demoStore.getPendingAgentRequests());
-    setSelectedAgent((current) => current || nextAgents[0]?.name || '');
+  const refreshData = async () => {
+    try {
+      const [nextAgents, nextRequests] = await Promise.all([
+        firebaseStore.fetchAgents(),
+        firebaseStore.fetchPendingAgentRequests(),
+      ]);
+      setAgents(nextAgents);
+      setRequests(nextRequests);
+      setSelectedAgent((current) => current || nextAgents[0]?.name || '');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Could not load agents.');
+    }
   };
 
   useEffect(() => {
-    refreshData();
+    void refreshData();
   }, []);
 
-  const handleAddAgent = () => {
-    const agent = demoStore.addAgent(newAgentName);
+  const handleAddAgent = async () => {
+    const agent = await firebaseStore.addAgent(newAgentName);
     if (!agent) {
       Alert.alert('Missing Agent', 'Please enter an agent name.');
       return;
@@ -50,30 +57,30 @@ export default function AdminAgents({ navigation }: any) {
 
     setNewAgentName('');
     setAddModalVisible(false);
-    refreshData();
+    void refreshData();
   };
 
-  const openMapModal = (user: User) => {
+  const openMapModal = (user: AppUser) => {
     setSelectedRequest(user);
     setSelectedAgent(agents[0]?.name || '');
     setMapModalVisible(true);
   };
 
-  const handleMapRequest = () => {
+  const handleMapRequest = async () => {
     if (!selectedRequest || !selectedAgent) return;
-    demoStore.assignAgentToUser(selectedRequest.id, selectedAgent);
+    await firebaseStore.assignAgentToUser(selectedRequest.id, selectedAgent);
     setMapModalVisible(false);
     setSelectedRequest(null);
-    refreshData();
+    void refreshData();
   };
 
-  const handleAddAndAssign = (user: User) => {
+  const handleAddAndAssign = async (user: AppUser) => {
     const requestedName = user.requestedAgentName?.trim();
     if (!requestedName) return;
 
-    const agent = demoStore.addAgent(requestedName);
-    demoStore.assignAgentToUser(user.id, agent?.name || requestedName);
-    refreshData();
+    const agent = await firebaseStore.addAgent(requestedName);
+    await firebaseStore.assignAgentToUser(user.id, agent?.name || requestedName);
+    void refreshData();
   };
 
   const openDeleteModal = (agent: Agent) => {
@@ -81,10 +88,10 @@ export default function AdminAgents({ navigation }: any) {
     setDeleteModalVisible(true);
   };
 
-  const handleDeleteAgent = () => {
+  const handleDeleteAgent = async () => {
     if (agentToDelete) {
-      demoStore.removeAgent(agentToDelete.id);
-      refreshData();
+      await firebaseStore.removeAgent(agentToDelete.id);
+      void refreshData();
     }
     setAgentToDelete(null);
     setDeleteModalVisible(false);

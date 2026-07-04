@@ -52,6 +52,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingVertical: LAYOUT.pagePadding,
+    paddingBottom: LAYOUT.pagePadding + 36,
     // On web, this helps with smooth momentum scrolling
     ...(Platform.OS === 'web' ? { WebkitOverflowScrolling: 'touch' as any } : {}),
   },

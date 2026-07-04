@@ -42,7 +42,7 @@ export default function AgentSelect({
   const getOptionLabel = (agent: string) => optionLabels[agent] || agent;
 
   return (
-    <View style={[styles.outer, style]}>
+    <View style={[styles.outer, open ? styles.outerOpen : null, style]}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <TouchableOpacity
         style={[
@@ -67,7 +67,7 @@ export default function AgentSelect({
       </TouchableOpacity>
 
       {open ? (
-        <View style={styles.menu}>
+        <View style={[styles.menu, { top: label ? 82 : 60 }]}>
           <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={agentOptions.length > 4}>
             {agentOptions.length === 0 ? (
               <Text style={styles.emptyText}>No agents available</Text>
@@ -101,7 +101,8 @@ export default function AgentSelect({
 }
 
 const styles = StyleSheet.create({
-  outer: { marginBottom: 14 },
+  outer: { marginBottom: 14, position: 'relative', zIndex: 1 },
+  outerOpen: { zIndex: 8000, elevation: 8000 },
   label: { color: COLORS.textSecondary, marginBottom: 8, fontSize: 13 },
   trigger: {
     height: LAYOUT.controlHeight,
@@ -120,8 +121,10 @@ const styles = StyleSheet.create({
   triggerText: { color: COLORS.textPrimary, fontSize: 16, marginLeft: 10 },
   placeholder: { color: '#7A7A7A' },
   menu: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     maxHeight: 220,
-    marginTop: 8,
     backgroundColor: '#141812',
     borderWidth: 1,
     borderColor: '#2A3028',

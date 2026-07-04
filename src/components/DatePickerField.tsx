@@ -22,6 +22,18 @@ export default function DatePickerField({
 }: Props) {
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
 
+  const parseValue = () => {
+    if (!value || value.length !== 10) {
+      return new Date(new Date().setFullYear(new Date().getFullYear() - 18));
+    }
+
+    const [month, day, year] = value.split('/').map((part) => Number(part));
+    const parsed = new Date(year, month - 1, day);
+    return Number.isNaN(parsed.getTime())
+      ? new Date(new Date().setFullYear(new Date().getFullYear() - 18))
+      : parsed;
+  };
+
   // Helper to format Date object to MM/DD/YYYY
   const formatDate = (date: Date) => {
     const mm = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -66,7 +78,7 @@ export default function DatePickerField({
 
       <TouchableOpacity 
         activeOpacity={1} 
-        onPress={Platform.OS !== 'web' ? openPicker : undefined} // Only open picker on native
+        onPress={Platform.OS !== 'web' ? openPicker : undefined}
         style={[styles.inputRow, error ? { borderColor: COLORS.error } : null]}
       >
         <TextInput
@@ -77,8 +89,8 @@ export default function DatePickerField({
           placeholderTextColor="#7A7A7A"
           keyboardType="number-pad"
           maxLength={10}
-          editable={Platform.OS === 'web'} // Read-only on mobile (use picker)
-          pointerEvents={Platform.OS === 'web' ? 'auto' : 'none'} // Pass touches through to parent on mobile
+          editable
+          onFocus={Platform.OS !== 'web' ? openPicker : undefined}
         />
         
         <TouchableOpacity onPress={openPicker} style={styles.iconWrap}>
@@ -94,7 +106,7 @@ export default function DatePickerField({
         onConfirm={handleConfirm}
         onCancel={() => setDatePickerVisibility(false)}
         // Default to 18 years ago for convenience
-        date={value && value.length === 10 ? new Date(value) : new Date(new Date().setFullYear(new Date().getFullYear() - 18))}
+        date={parseValue()}
         maximumDate={new Date()}
       />
     </View>

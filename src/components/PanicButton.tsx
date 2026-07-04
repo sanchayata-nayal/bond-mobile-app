@@ -89,6 +89,9 @@ const styles = StyleSheet.create({
   },
   touchable: {
     zIndex: 1,
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
+    borderRadius: BUTTON_SIZE / 2,
     // Native shadow
     ...Platform.select({
       ios: {

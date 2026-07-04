@@ -21,11 +21,11 @@ import DatePickerField from '../components/DatePickerField';
 import AppButton from '../components/AppButton';
 import Collapsible from '../components/Collapsible';
 import PhoneInput from '../components/PhoneInput';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, FieldErrors } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
-import { demoStore } from '../services/demoStore';
 import { firebaseStore } from '../services/firebaseStore';
+import { sessionStore } from '../services/sessionStore';
 import { COLORS, LAYOUT } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -36,7 +36,13 @@ import {
 import { EMAIL_ERROR, EMAIL_REGEX } from '../utils/validation';
 
 /* ---------- CONSTANTS ---------- */
-const LEGAL_DISCLAIMER_TEXT = `By using the Bond App, you expressly consent to the collection, storage, and processing of the personal information provided, including your real-time location, personal identification, and emergency contact details. You grant the Bond App permission to access and utilize your device's geolocation data solely for the purpose of deploying emergency assistance. You understand that this data may be transmitted to your designated emergency contacts and/or safety agents in the event of a panic alert.`;
+const LEGAL_DISCLAIMER_TEXT = `By creating an account, you consent to the Bond App collecting and storing the profile information you provide, including your name, email address, phone number, date of birth, assigned or requested agent, and emergency contact details.
+
+The app requests access to your device location only to support the emergency panic feature. When you trigger a panic alert, your current location, profile details, assigned agent, and emergency contact information may be sent to configured emergency recipients and safety agents so they can respond.
+
+Your information is used for account access, emergency routing, admin support, and safety-related reporting. The Bond App is not a replacement for emergency services; if you are in immediate danger, contact local emergency services.
+
+By tapping "I Agree & Create Account," you confirm that the information provided is accurate and that you consent to this collection, storage, and emergency-use sharing.`;
 
 /* ---------- Validation Logic ---------- */
 const parseDate = (str: string) => {
@@ -55,6 +61,14 @@ const parseDate = (str: string) => {
     return null;
   }
   return date;
+};
+
+const normalizeName = (name?: string) => name?.trim().replace(/\s+/g, ' ').toLowerCase() || '';
+const normalizePhone = (phone?: string) => phone?.replace(/\D/g, '') || '';
+
+const uniqueEmergencyValue = (values: string[]) => {
+  const filled = values.filter(Boolean);
+  return filled.length === new Set(filled).size;
 };
 
 const schema = yup
@@ -105,23 +119,77 @@ const schema = yup
         },
       ),
 
-    ec1Name: yup.string().required('Contact 1 name required'),
+    ec1Name: yup
+      .string()
+      .required('Contact 1 name required')
+      .test('unique-emergency-name', 'Emergency contact names must be unique', function () {
+        const parent = this.parent;
+        return uniqueEmergencyValue([
+          normalizeName(parent.ec1Name),
+          normalizeName(parent.ec2Name),
+          normalizeName(parent.ec3Name),
+        ]);
+      }),
     ec1Phone: yup
       .string()
       .required('Contact 1 phone required')
-      .matches(/^\d{10}$/, 'Must be 10 digits'),
+      .matches(/^\d{10}$/, 'Must be 10 digits')
+      .test('unique-emergency-phone', 'Emergency contact phones must be unique', function () {
+        const parent = this.parent;
+        return uniqueEmergencyValue([
+          normalizePhone(parent.ec1Phone),
+          normalizePhone(parent.ec2Phone),
+          normalizePhone(parent.ec3Phone),
+        ]);
+      }),
 
-    ec2Name: yup.string().required('Contact 2 name required'),
+    ec2Name: yup
+      .string()
+      .required('Contact 2 name required')
+      .test('unique-emergency-name', 'Emergency contact names must be unique', function () {
+        const parent = this.parent;
+        return uniqueEmergencyValue([
+          normalizeName(parent.ec1Name),
+          normalizeName(parent.ec2Name),
+          normalizeName(parent.ec3Name),
+        ]);
+      }),
     ec2Phone: yup
       .string()
       .required('Contact 2 phone required')
-      .matches(/^\d{10}$/, 'Must be 10 digits'),
+      .matches(/^\d{10}$/, 'Must be 10 digits')
+      .test('unique-emergency-phone', 'Emergency contact phones must be unique', function () {
+        const parent = this.parent;
+        return uniqueEmergencyValue([
+          normalizePhone(parent.ec1Phone),
+          normalizePhone(parent.ec2Phone),
+          normalizePhone(parent.ec3Phone),
+        ]);
+      }),
 
-    ec3Name: yup.string().required('Contact 3 name required'),
+    ec3Name: yup
+      .string()
+      .required('Contact 3 name required')
+      .test('unique-emergency-name', 'Emergency contact names must be unique', function () {
+        const parent = this.parent;
+        return uniqueEmergencyValue([
+          normalizeName(parent.ec1Name),
+          normalizeName(parent.ec2Name),
+          normalizeName(parent.ec3Name),
+        ]);
+      }),
     ec3Phone: yup
       .string()
       .required('Contact 3 phone required')
-      .matches(/^\d{10}$/, 'Must be 10 digits'),
+      .matches(/^\d{10}$/, 'Must be 10 digits')
+      .test('unique-emergency-phone', 'Emergency contact phones must be unique', function () {
+        const parent = this.parent;
+        return uniqueEmergencyValue([
+          normalizePhone(parent.ec1Phone),
+          normalizePhone(parent.ec2Phone),
+          normalizePhone(parent.ec3Phone),
+        ]);
+      }),
   })
   .required();
 
@@ -147,15 +215,24 @@ const PhoneField = ({ controlName, label, control, error }: any) => (
 
 export default function SignUp({ navigation }: any) {
   const { width } = useWindowDimensions();
+  const scrollRef = useRef<ScrollView | null>(null);
+  const fieldOffsets = useRef<Record<string, number>>({});
   const headingAnim = useRef(new Animated.Value(0)).current;
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [agentNames, setAgentNames] = useState<string[]>([]);
+  const [contactOpen, setContactOpen] = useState({ ec1: true, ec2: false, ec3: false });
 
   const [formData, setFormData] = useState<any>(null);
-  const agentOptions = [...demoStore.getAgentNames(), AGENT_NOT_LISTED_VALUE];
+  const agentOptions = [...agentNames, AGENT_NOT_LISTED_VALUE];
 
   const isTabletOrWeb = width > 600;
   const formWidth = isTabletOrWeb ? 500 : '100%';
+  const registerField = (name: string) => ({
+    onLayout: (event: any) => {
+      fieldOffsets.current[name] = event.nativeEvent.layout.y;
+    },
+  });
 
   useEffect(() => {
     Animated.timing(headingAnim, {
@@ -163,6 +240,22 @@ export default function SignUp({ navigation }: any) {
       duration: 500,
       useNativeDriver: true,
     }).start();
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    firebaseStore
+      .fetchAgentNames()
+      .then((names) => {
+        if (mounted) setAgentNames(names);
+      })
+      .catch(() => {
+        if (mounted) setAgentNames([]);
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const { control, handleSubmit, formState, setValue, watch } = useForm({
@@ -186,6 +279,43 @@ export default function SignUp({ navigation }: any) {
     mode: 'onChange',
   });
   const selectedAgent = watch('agent');
+
+  const fieldOrder = [
+    'firstName',
+    'lastName',
+    'email',
+    'dob',
+    'phone',
+    'agent',
+    'requestedAgentName',
+    'password',
+    'ec1Name',
+    'ec1Phone',
+    'ec2Name',
+    'ec2Phone',
+    'ec3Name',
+    'ec3Phone',
+  ];
+
+  const openContactForField = (fieldName: string) => {
+    if (fieldName.startsWith('ec1')) setContactOpen((current) => ({ ...current, ec1: true }));
+    if (fieldName.startsWith('ec2')) setContactOpen((current) => ({ ...current, ec2: true }));
+    if (fieldName.startsWith('ec3')) setContactOpen((current) => ({ ...current, ec3: true }));
+  };
+
+  const scrollToField = (fieldName: string) => {
+    openContactForField(fieldName);
+
+    setTimeout(() => {
+      const y = fieldOffsets.current[fieldName] ?? 0;
+      scrollRef.current?.scrollTo({ y: Math.max(y - 24, 0), animated: true });
+    }, 80);
+  };
+
+  const onInvalidSubmit = (errors: FieldErrors) => {
+    const firstInvalid = fieldOrder.find((fieldName) => !!errors[fieldName]);
+    if (firstInvalid) scrollToField(firstInvalid);
+  };
 
   const onPreSubmit = (data: any) => {
     setFormData(data);
@@ -219,13 +349,7 @@ export default function SignUp({ navigation }: any) {
       });
 
       // 2. Update local session
-      const localUser = {
-        ...newUser,
-        id: newUser.uid,
-        joinedDate: newUser.joinedAt?.split('T')[0],
-      };
-      demoStore.setUser(localUser);
-      demoStore.updateUser(localUser);
+      sessionStore.setUser(newUser);
 
       // 3. Navigate
       setShowDisclaimer(false);
@@ -246,6 +370,7 @@ export default function SignUp({ navigation }: any) {
         style={styles.keyboardView}
       >
         <ScrollView
+          ref={scrollRef}
           style={styles.pageScroll}
           contentContainerStyle={styles.pageScrollContent}
           keyboardShouldPersistTaps="handled"
@@ -282,7 +407,7 @@ export default function SignUp({ navigation }: any) {
 
             {/* Name Row */}
             <View style={styles.row}>
-              <View style={{ flex: 1, marginRight: 8 }}>
+              <View style={{ flex: 1, marginRight: 8 }} {...registerField('firstName')}>
                 <Controller
                   control={control}
                   name="firstName"
@@ -297,7 +422,7 @@ export default function SignUp({ navigation }: any) {
                   )}
                 />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1 }} {...registerField('lastName')}>
                 <Controller
                   control={control}
                   name="lastName"
@@ -315,169 +440,205 @@ export default function SignUp({ navigation }: any) {
             </View>
 
             {/* Email Field (Added) */}
-            <Controller
-              control={control}
-              name="email"
-              render={({ field, fieldState }) => (
-                <AppInput
-                  label="Email Address"
-                  placeholder="jane@example.com"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  error={fieldState.error?.message}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              )}
-            />
-
-            <Controller
-              control={control}
-              name="dob"
-              render={({ field, fieldState }) => (
-                <DatePickerField
-                  label="Date of Birth"
-                  value={field.value}
-                  onChange={(v) => setValue('dob', v, { shouldValidate: true })}
-                  error={fieldState.error?.message}
-                />
-              )}
-            />
-
-            <PhoneField
-              controlName="phone"
-              label="Phone Number"
-              control={control}
-              error={formState.errors.phone?.message}
-            />
-
-            <Controller
-              control={control}
-              name="agent"
-              render={({ field, fieldState }) => (
-                <AgentSelect
-                  label="Agent Name"
-                  placeholder="Select assigned agent"
-                  value={field.value}
-                  onChange={field.onChange}
-                  options={agentOptions}
-                  optionLabels={{ [AGENT_NOT_LISTED_VALUE]: AGENT_NOT_LISTED_LABEL }}
-                  error={fieldState.error?.message}
-                />
-              )}
-            />
-
-            {selectedAgent === AGENT_NOT_LISTED_VALUE && (
+            <View {...registerField('email')}>
               <Controller
                 control={control}
-                name="requestedAgentName"
+                name="email"
                 render={({ field, fieldState }) => (
                   <AppInput
-                    label="Requested Agent Name"
-                    placeholder="Enter agent name"
+                    label="Email Address"
+                    placeholder="jane@example.com"
                     value={field.value}
                     onChangeText={field.onChange}
                     error={fieldState.error?.message}
-                    autoCapitalize="words"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
                   />
                 )}
               />
+            </View>
+
+            <View {...registerField('dob')}>
+              <Controller
+                control={control}
+                name="dob"
+                render={({ field, fieldState }) => (
+                  <DatePickerField
+                    label="Date of Birth"
+                    value={field.value}
+                    onChange={(v) => setValue('dob', v, { shouldValidate: true })}
+                    error={fieldState.error?.message}
+                  />
+                )}
+              />
+            </View>
+
+            <View {...registerField('phone')}>
+              <PhoneField
+                controlName="phone"
+                label="Phone Number"
+                control={control}
+                error={formState.errors.phone?.message}
+              />
+            </View>
+
+            <View style={styles.agentField} {...registerField('agent')}>
+              <Controller
+                control={control}
+                name="agent"
+                render={({ field, fieldState }) => (
+                  <AgentSelect
+                    label="Agent Name"
+                    placeholder="Select assigned agent"
+                    value={field.value}
+                    onChange={field.onChange}
+                    options={agentOptions}
+                    optionLabels={{ [AGENT_NOT_LISTED_VALUE]: AGENT_NOT_LISTED_LABEL }}
+                    error={fieldState.error?.message}
+                  />
+                )}
+              />
+            </View>
+
+            {selectedAgent === AGENT_NOT_LISTED_VALUE && (
+              <View {...registerField('requestedAgentName')}>
+                <Controller
+                  control={control}
+                  name="requestedAgentName"
+                  render={({ field, fieldState }) => (
+                    <AppInput
+                      label="Requested Agent Name"
+                      placeholder="Enter agent name"
+                      value={field.value}
+                      onChangeText={field.onChange}
+                      error={fieldState.error?.message}
+                      autoCapitalize="words"
+                    />
+                  )}
+                />
+                <Text style={styles.fieldHint}>This request is stored on your profile and shown to admins under Agent Management.</Text>
+              </View>
             )}
 
             <View style={styles.divider} />
 
             <Text style={styles.sectionTitle}>Security</Text>
-            <Controller
-              control={control}
-              name="password"
-              render={({ field, fieldState }) => (
-                <PasswordInput
-                  label="Password"
-                  placeholder="Min 6 chars, alphanumeric"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  error={fieldState.error?.message}
-                />
-              )}
-            />
+            <View {...registerField('password')}>
+              <Controller
+                control={control}
+                name="password"
+                render={({ field, fieldState }) => (
+                  <PasswordInput
+                    label="Password"
+                    placeholder="Min 6 chars, alphanumeric"
+                    value={field.value}
+                    onChangeText={field.onChange}
+                    error={fieldState.error?.message}
+                  />
+                )}
+              />
+            </View>
 
             <View style={styles.divider} />
 
             <Text style={styles.sectionTitle}>Emergency Contacts</Text>
             <Text style={styles.sectionSub}>3 contacts are required for maximum safety.</Text>
 
-            <Collapsible title="Contact 1 (Required)" startOpen>
-              <Controller
-                control={control}
-                name="ec1Name"
-                render={({ field, fieldState }) => (
-                  <AppInput
-                    label="Full Name"
-                    placeholder="Name"
-                    value={field.value}
-                    onChangeText={field.onChange}
-                    error={fieldState.error?.message}
-                  />
-                )}
-              />
-              <PhoneField
-                controlName="ec1Phone"
-                label="Phone"
-                control={control}
-                error={formState.errors.ec1Phone?.message}
-              />
+            <Collapsible
+              title="Contact 1 (Required)"
+              open={contactOpen.ec1}
+              onOpenChange={(open) => setContactOpen((current) => ({ ...current, ec1: open }))}
+            >
+              <View {...registerField('ec1Name')}>
+                <Controller
+                  control={control}
+                  name="ec1Name"
+                  render={({ field, fieldState }) => (
+                    <AppInput
+                      label="Full Name"
+                      placeholder="Name"
+                      value={field.value}
+                      onChangeText={field.onChange}
+                      error={fieldState.error?.message}
+                    />
+                  )}
+                />
+              </View>
+              <View {...registerField('ec1Phone')}>
+                <PhoneField
+                  controlName="ec1Phone"
+                  label="Phone"
+                  control={control}
+                  error={formState.errors.ec1Phone?.message}
+                />
+              </View>
             </Collapsible>
 
-            <Collapsible title="Contact 2 (Required)">
-              <Controller
-                control={control}
-                name="ec2Name"
-                render={({ field, fieldState }) => (
-                  <AppInput
-                    label="Full Name"
-                    placeholder="Name"
-                    value={field.value}
-                    onChangeText={field.onChange}
-                    error={fieldState.error?.message}
-                  />
-                )}
-              />
-              <PhoneField
-                controlName="ec2Phone"
-                label="Phone"
-                control={control}
-                error={formState.errors.ec2Phone?.message}
-              />
+            <Collapsible
+              title="Contact 2 (Required)"
+              open={contactOpen.ec2}
+              onOpenChange={(open) => setContactOpen((current) => ({ ...current, ec2: open }))}
+            >
+              <View {...registerField('ec2Name')}>
+                <Controller
+                  control={control}
+                  name="ec2Name"
+                  render={({ field, fieldState }) => (
+                    <AppInput
+                      label="Full Name"
+                      placeholder="Name"
+                      value={field.value}
+                      onChangeText={field.onChange}
+                      error={fieldState.error?.message}
+                    />
+                  )}
+                />
+              </View>
+              <View {...registerField('ec2Phone')}>
+                <PhoneField
+                  controlName="ec2Phone"
+                  label="Phone"
+                  control={control}
+                  error={formState.errors.ec2Phone?.message}
+                />
+              </View>
             </Collapsible>
 
-            <Collapsible title="Contact 3 (Required)">
-              <Controller
-                control={control}
-                name="ec3Name"
-                render={({ field, fieldState }) => (
-                  <AppInput
-                    label="Full Name"
-                    placeholder="Name"
-                    value={field.value}
-                    onChangeText={field.onChange}
-                    error={fieldState.error?.message}
-                  />
-                )}
-              />
-              <PhoneField
-                controlName="ec3Phone"
-                label="Phone"
-                control={control}
-                error={formState.errors.ec3Phone?.message}
-              />
+            <Collapsible
+              title="Contact 3 (Required)"
+              open={contactOpen.ec3}
+              onOpenChange={(open) => setContactOpen((current) => ({ ...current, ec3: open }))}
+            >
+              <View {...registerField('ec3Name')}>
+                <Controller
+                  control={control}
+                  name="ec3Name"
+                  render={({ field, fieldState }) => (
+                    <AppInput
+                      label="Full Name"
+                      placeholder="Name"
+                      value={field.value}
+                      onChangeText={field.onChange}
+                      error={fieldState.error?.message}
+                    />
+                  )}
+                />
+              </View>
+              <View {...registerField('ec3Phone')}>
+                <PhoneField
+                  controlName="ec3Phone"
+                  label="Phone"
+                  control={control}
+                  error={formState.errors.ec3Phone?.message}
+                />
+              </View>
             </Collapsible>
 
             <View style={{ height: 20 }} />
 
             <AppButton
               title="Create Account"
-              onPress={handleSubmit(onPreSubmit)}
-              disabled={!formState.isValid}
+              onPress={handleSubmit(onPreSubmit, onInvalidSubmit)}
             />
 
             <TouchableOpacity
@@ -577,6 +738,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1F241D',
   },
+  agentField: { zIndex: 6000 },
+  fieldHint: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: -6,
+    marginBottom: 12,
+  },
   sectionTitle: {
     color: COLORS.accent,
     fontSize: 16,
@@ -614,5 +783,11 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   modalTitle: { color: COLORS.textPrimary, fontSize: 20, fontWeight: 'bold', marginTop: 10 },
-  modalText: { color: COLORS.textSecondary, marginBottom: 16, lineHeight: 22, fontSize: 14 },
+  modalText: {
+    color: COLORS.textSecondary,
+    marginBottom: 16,
+    lineHeight: 22,
+    fontSize: 14,
+    textAlign: 'justify',
+  },
 });

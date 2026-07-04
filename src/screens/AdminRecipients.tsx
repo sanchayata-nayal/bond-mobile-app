@@ -7,7 +7,7 @@ import AppInput from '../components/AppInput';
 import AppButton from '../components/AppButton';
 import PhoneInput from '../components/PhoneInput';
 import ConfirmationModal from '../components/ConfirmationModal'; // Reused custom modal
-import { demoStore } from '../services/demoStore';
+import { firebaseStore } from '../services/firebaseStore';
 import { COLORS, LAYOUT } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -32,48 +32,49 @@ export default function AdminRecipients({ navigation }: any) {
     refreshData();
   }, []);
 
-  const refreshData = () => {
-    const data = demoStore.getRecipients();
-    setPrimary(data.primary);
-    setRecipients(data.list);
+  const refreshData = async () => {
+    const data = await firebaseStore.getAdminSettings();
+    setPrimary(data.primaryCall);
+    setRecipients(data.smsList);
   };
 
-  const handleSetPrimary = (phone: string) => {
-    demoStore.updatePrimaryNumber(phone);
+  const handleSetPrimary = async (phone: string) => {
+    await firebaseStore.updatePrimaryCall(phone);
     setPrimary(phone);
     setShowPrimaryDropdown(false);
   };
 
-  const handleAddRecipient = () => {
+  const handleAddRecipient = async () => {
     if (!newName || !newPhone) {
       // Minimal alert for empty fields is fine, or use custom if preferred
       Alert.alert('Missing Data', 'Please enter both name and phone.');
       return;
     }
     // Store formatted with +1 for simplicity in this demo
-    demoStore.addRecipient(newName, `+1${newPhone}`);
-    refreshData();
+    await firebaseStore.addRecipient(newName, `+1${newPhone}`);
+    await refreshData();
     setNewName('');
     setNewPhone('');
     setAddModalVisible(false);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (selectedDeleteId) {
-      demoStore.removeRecipient(selectedDeleteId);
+      await firebaseStore.removeRecipient(selectedDeleteId);
       
       // If we deleted the primary number, reset primary to empty or first available
-      const updatedList = demoStore.getRecipients().list;
+      const updatedSettings = await firebaseStore.getAdminSettings();
+      const updatedList = updatedSettings.smsList;
       if (updatedList.length > 0 && !updatedList.find(r => r.phone === primary)) {
         const newPrime = updatedList[0].phone;
-        demoStore.updatePrimaryNumber(newPrime);
+        await firebaseStore.updatePrimaryCall(newPrime);
         setPrimary(newPrime);
       } else if (updatedList.length === 0) {
-        demoStore.updatePrimaryNumber('');
+        await firebaseStore.updatePrimaryCall('');
         setPrimary('');
       }
 
-      refreshData();
+      await refreshData();
     }
     setDeleteModalVisible(false);
     setSelectedDeleteId(null);

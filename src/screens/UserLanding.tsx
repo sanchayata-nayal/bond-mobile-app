@@ -1,25 +1,39 @@
 // src/screens/UserLanding.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Platform, Linking, Alert } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import DashboardHeader from '../components/DashboardHeader';
 import PanicButton from '../components/PanicButton';
 import AppButton from '../components/AppButton';
 import ConfirmationModal from '../components/ConfirmationModal';
-import { demoStore } from '../services/demoStore';
+import { firebaseStore, Recipient } from '../services/firebaseStore';
+import { sessionStore } from '../services/sessionStore';
 import { COLORS } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-
-// The primary number for both SMS and Calls
-const AGENT_NUMBER = '+15615632245';
+import * as SMS from 'expo-sms';
 
 export default function UserLanding({ navigation }: any) {
-  const user = demoStore.getUser();
+  const user = sessionStore.getUser();
   const [menuOpen, setMenuOpen] = useState(false);
   const [panicState, setPanicState] = useState<'idle' | 'active'>('idle');
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [primaryCall, setPrimaryCall] = useState('');
+  const [smsRecipients, setSmsRecipients] = useState<Recipient[]>([]);
+
+  useEffect(() => {
+    firebaseStore
+      .getAdminSettings()
+      .then((settings) => {
+        setPrimaryCall(settings.primaryCall);
+        setSmsRecipients(settings.smsList);
+      })
+      .catch(() => {
+        setPrimaryCall('');
+        setSmsRecipients([]);
+      });
+  }, []);
 
   const handleLogout = () => {
     setMenuOpen(false);
@@ -28,7 +42,8 @@ export default function UserLanding({ navigation }: any) {
 
   const confirmLogout = () => {
     setLogoutVisible(false);
-    demoStore.clear();
+    firebaseStore.logout().catch(() => {});
+    sessionStore.clear();
     navigation.reset({ index: 0, routes: [{ name: 'Starting' }] });
   };
 
@@ -36,7 +51,6 @@ export default function UserLanding({ navigation }: any) {
     setIsLocating(true);
 
     try {
-      // 1. Request Permissions
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Denied', 'We need your location to send help.');
@@ -44,40 +58,55 @@ export default function UserLanding({ navigation }: any) {
         return;
       }
 
-      // 2. Get Exact Location
       const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const { latitude, longitude } = location.coords;
-      
-      // Google Maps Link
       const mapLink = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
 
-      // 3. Construct Message
       const contacts = user?.emergencyContacts || [];
       const contactList = contacts.map((c: any) => `${c.name}: ${c.phone}`).join('\n');
-      
       const body = [
-        `🚨 EMERGENCY ALERT 🚨`,
+        'EMERGENCY ALERT',
         `${user?.firstName} ${user?.lastName} has triggered the panic button.`,
         `Location: ${mapLink}`,
         `Accuracy: ${location.coords.accuracy?.toFixed(0)} meters`,
         `Agent: ${user?.agent || 'Unknown'}`,
-        `Contacts:\n${contactList}`
+        `Contacts:\n${contactList}`,
       ].join('\n\n');
 
-      // 4. Open SMS (Targeting Agent Number)
-      const separator = Platform.OS === 'ios' ? '&' : '?';
-      const smsUrl = `sms:${AGENT_NUMBER}${separator}body=${encodeURIComponent(body)}`;
+      const recipientPhones = smsRecipients.map((recipient) => recipient.phone).filter(Boolean);
+      const targetPhones = recipientPhones.length > 0 ? recipientPhones : primaryCall ? [primaryCall] : [];
 
-      await Linking.openURL(smsUrl);
-      
+      if (targetPhones.length === 0) {
+        Alert.alert('Routing Missing', 'No emergency recipient or primary call number is configured.');
+        setIsLocating(false);
+        return;
+      }
+
+      if (user) {
+        await firebaseStore.logPanicEvent(user, mapLink, {
+          latitude,
+          longitude,
+          accuracy: location.coords.accuracy,
+        });
+      }
+
+      const canSendSms = await SMS.isAvailableAsync();
+      if (canSendSms) {
+        await SMS.sendSMSAsync(targetPhones, body);
+      } else {
+        const separator = Platform.OS === 'ios' ? '&' : '?';
+        const smsUrl = `sms:${targetPhones.join(',')}${separator}body=${encodeURIComponent(body)}`;
+        await Linking.openURL(smsUrl);
+      }
+
       setPanicState('active');
       setIsLocating(false);
 
-      // 5. Auto-dial Agent (Delay allows SMS app to open first)
-      setTimeout(() => {
-        Linking.openURL(`tel:${AGENT_NUMBER}`).catch(() => {});
-      }, 2500);
-
+      if (primaryCall) {
+        setTimeout(() => {
+          Linking.openURL(`tel:${primaryCall}`).catch(() => {});
+        }, 2500);
+      }
     } catch (error) {
       Alert.alert('Error', 'Could not fetch location or open messaging.');
       setIsLocating(false);
@@ -86,10 +115,10 @@ export default function UserLanding({ navigation }: any) {
 
   return (
     <ScreenContainer scrollable={false}>
-      <DashboardHeader 
-        title="All State Bail Bond Services" 
-        userInitial={user?.firstName || 'U'} 
-        onMenuPress={() => setMenuOpen(true)} 
+      <DashboardHeader
+        title="All State Bail Bond Services"
+        userInitial={user?.firstName || 'U'}
+        onMenuPress={() => setMenuOpen(true)}
       />
 
       <View style={styles.content}>
@@ -114,36 +143,41 @@ export default function UserLanding({ navigation }: any) {
             </View>
           </>
         ) : (
-          /* Active Emergency State */
           <View style={styles.activeState}>
             <Ionicons name="alert-circle" size={64} color={COLORS.panic} style={{ marginBottom: 16 }} />
             <Text style={styles.activeTitle}>Emergency Mode Active</Text>
             <Text style={styles.activeDesc}>
-              Location sent to Agent. SMS composer opened. Dialing {AGENT_NUMBER} shortly...
+              Location logged. SMS composer opened.
+              {primaryCall ? ` Dialing ${primaryCall} shortly...` : ''}
             </Text>
 
             <View style={{ width: '100%', marginTop: 32 }}>
-              <AppButton 
-                title="Call Agent Again" 
-                onPress={() => Linking.openURL(`tel:${AGENT_NUMBER}`)} 
-                variant="primary" 
+              <AppButton
+                title="Call Agent Again"
+                onPress={() => primaryCall && Linking.openURL(`tel:${primaryCall}`)}
+                variant="primary"
                 style={{ backgroundColor: COLORS.panic, marginBottom: 16 }}
               />
-              <AppButton 
-                title="I'm Safe / Cancel" 
-                onPress={() => setPanicState('idle')} 
-                variant="ghost" 
+              <AppButton
+                title="I'm Safe / Cancel"
+                onPress={() => setPanicState('idle')}
+                variant="ghost"
               />
             </View>
           </View>
         )}
       </View>
 
-      {/* Menu Modal */}
       <Modal visible={menuOpen} transparent animationType="fade">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setMenuOpen(false)}>
           <View style={styles.menuContainer}>
-            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); navigation.navigate('UserDetails'); }}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setMenuOpen(false);
+                navigation.navigate('UserDetails');
+              }}
+            >
               <Ionicons name="person" size={20} color={COLORS.textPrimary} style={{ marginRight: 12 }} />
               <Text style={styles.menuText}>My Profile</Text>
             </TouchableOpacity>
@@ -156,7 +190,6 @@ export default function UserLanding({ navigation }: any) {
         </TouchableOpacity>
       </Modal>
 
-      {/* Logout Confirmation Modal */}
       <ConfirmationModal
         visible={logoutVisible}
         title="Log Out"

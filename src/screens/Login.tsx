@@ -9,35 +9,20 @@ import {
   Platform,
   Modal,
   ScrollView,
-  TextInput,
 } from 'react-native';
 import ScreenContainer from '../components/ScreenContainer';
 import AppInput from '../components/AppInput';
 import PasswordInput from '../components/PasswordInput';
-import AgentSelect from '../components/AgentSelect';
 import AppButton from '../components/AppButton';
-import DatePickerField from '../components/DatePickerField';
 import ConfirmationModal from '../components/ConfirmationModal';
-import PhoneInput from '../components/PhoneInput';
 import { useForm, Controller } from 'react-hook-form';
-import { demoStore } from '../services/demoStore';
-import { firebaseStore } from '../services/firebaseStore'; // <--- IMPORT FIREBASE
-import { COLORS, LAYOUT } from '../styles/theme';
+import { firebaseStore } from '../services/firebaseStore';
+import { sessionStore } from '../services/sessionStore';
+import { COLORS } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { EMAIL_ERROR, EMAIL_REGEX } from '../utils/validation';
-
-/* ---------- MOCK DATA (Kept for Forgot Password Logic only) ---------- */
-const MOCK_USER = {
-  id: 'test-user-001',
-  firstName: 'John',
-  lastName: 'Doe',
-  dob: '05/15/1985',
-  phone: '+15615550100',
-  agent: 'Agent Smith',
-  email: 'demo@bond.com',
-};
 
 /* ---------- SCHEMAS ---------- */
 const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/;
@@ -60,45 +45,8 @@ const loginSchema = yup
 const forgotIdentitySchema = yup
   .object({
     email: emailRule('Required'),
-    phone: yup
-      .string()
-      .required('Required')
-      .matches(/^\d{10}$/, '10 digits required'),
-    dob: yup.string().required('Required'),
-    agent: yup.string().required('Required'),
   })
   .required();
-
-const forgotResetSchema = yup
-  .object({
-    newPassword: yup.string().required('Required').matches(PASSWORD_REGEX, PASSWORD_ERROR),
-  })
-  .required();
-
-/* ---------- SIMPLE LOCAL INPUT (FAILSAFE) ---------- */
-const SimpleResetInput = ({ value, onChangeText, placeholder, error, autoFocus }: any) => {
-  const [show, setShow] = useState(false);
-  return (
-    <View style={{ marginBottom: 14 }}>
-      <View style={[styles.simpleWrapper, error ? { borderColor: COLORS.error } : null]}>
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor="#7A7A7A"
-          secureTextEntry={!show}
-          style={styles.simpleInput}
-          autoCapitalize="none"
-          autoFocus={autoFocus}
-        />
-        <TouchableOpacity onPress={() => setShow(!show)} style={{ padding: 10 }}>
-          <Ionicons name={show ? 'eye-off' : 'eye'} size={20} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-      </View>
-      {error ? <Text style={styles.err}>{error}</Text> : null}
-    </View>
-  );
-};
 
 export default function Login({ navigation }: any) {
   /* --- LOGIN FORM --- */
@@ -110,7 +58,6 @@ export default function Login({ navigation }: any) {
 
   /* --- STATE --- */
   const [forgotVisible, setForgotVisible] = useState(false);
-  const [resetStep, setResetStep] = useState<1 | 2>(1);
   const [isLoading, setIsLoading] = useState(false);
   const [alertConfig, setAlertConfig] = useState<{
     visible: boolean;
@@ -123,8 +70,6 @@ export default function Login({ navigation }: any) {
     message: '',
     type: 'error',
   });
-  const agentOptions = demoStore.getAgentNames(MOCK_USER.agent);
-
   /* --- FORGOT FORMS --- */
   const {
     control: identityControl,
@@ -132,19 +77,8 @@ export default function Login({ navigation }: any) {
     formState: identityState,
     reset: resetIdentity,
   } = useForm({
-    defaultValues: { email: '', phone: '', dob: '', agent: '' },
+    defaultValues: { email: '' },
     resolver: yupResolver(forgotIdentitySchema),
-    mode: 'onChange',
-  });
-
-  const {
-    control: resetControl,
-    handleSubmit: handleResetSubmit,
-    formState: resetState,
-    reset: resetFinal,
-  } = useForm({
-    defaultValues: { newPassword: '' },
-    resolver: yupResolver(forgotResetSchema),
     mode: 'onChange',
   });
 
@@ -154,28 +88,19 @@ export default function Login({ navigation }: any) {
 
   /* --- HANDLERS --- */
   const onLogin = async (data: any) => {
-    // ADMIN BACKDOOR (Optional: Keep for your testing)
-    if (data.email.toLowerCase() === 'admin@bond.com' && data.password === 'admin123') {
-      navigation.reset({ index: 0, routes: [{ name: 'AdminLanding' }] });
-      return;
-    }
-
     setIsLoading(true);
     try {
       // 1. Authenticate with Firebase
       const userProfile = await firebaseStore.loginUser(data.email, data.password);
 
-      // 2. Map Firebase 'uid' to local 'id' to fix Type Error
-      const localUser = {
-        ...userProfile,
-        id: userProfile.uid,
-      };
+      // 2. Update local session
+      sessionStore.setUser(userProfile);
 
-      // 3. Update local session
-      demoStore.setUser(localUser);
-
-      // 4. Navigate
-      navigation.reset({ index: 0, routes: [{ name: 'UserLanding' }] });
+      // 3. Navigate based on Firestore role
+      navigation.reset({
+        index: 0,
+        routes: [{ name: userProfile.role === 'admin' ? 'AdminLanding' : 'UserLanding' }],
+      });
     } catch (error: any) {
       let msg = error.message;
       if (msg.includes('auth/invalid-credential')) msg = 'Invalid email or password.';
@@ -187,39 +112,23 @@ export default function Login({ navigation }: any) {
     }
   };
 
-  const onVerifyIdentity = (data: any) => {
-    // NOTE: This currently uses MOCK data for the logic check.
-    // Implementing real Firestore query for this specific check requires indexing.
-    // For now, this is a UI simulation.
-    const isValid =
-      (data.email.toLowerCase() === MOCK_USER.email || true) &&
-      data.agent.trim().toLowerCase() === MOCK_USER.agent.toLowerCase() &&
-      (data.dob === MOCK_USER.dob || data.dob === '05/15/1985') &&
-      (data.phone === MOCK_USER.phone.replace('+1', '') || data.phone === '5615550100');
-
-    if (isValid) {
-      resetFinal({ newPassword: '' });
-      setResetStep(2);
-    } else {
-      showAlert('Verification Failed', 'Details do not match our records.', 'error');
+  const onVerifyIdentity = async (data: any) => {
+    try {
+      await firebaseStore.sendPasswordReset(data.email);
+      closeForgot();
+      showAlert(
+        'Reset Email Sent',
+        'If an account exists for that email, a password reset link has been sent.',
+        'success',
+      );
+    } catch (error: any) {
+      showAlert('Reset Failed', error.message || 'Could not send password reset email.', 'error');
     }
-  };
-
-  const onFinalizeReset = (data: any) => {
-    setForgotVisible(false);
-    setResetStep(1);
-    resetIdentity();
-    resetFinal();
-    setTimeout(() => {
-      showAlert('Success', 'Password updated successfully. Please login.', 'success');
-    }, 500);
   };
 
   const closeForgot = () => {
     setForgotVisible(false);
-    setResetStep(1);
     resetIdentity();
-    resetFinal();
   };
 
   return (
@@ -293,117 +202,41 @@ export default function Login({ navigation }: any) {
       <Modal visible={forgotVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            {resetStep === 1 ? (
-              <ScrollView
-                style={{ width: '100%' }}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-              >
-                <Text style={styles.modalTitle}>Recover Account</Text>
-                <Text style={styles.modalSub}>Enter your details to verify identity.</Text>
+            <ScrollView
+              style={{ width: '100%' }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Text style={styles.modalTitle}>Reset Password</Text>
+              <Text style={styles.modalSub}>
+                Enter your account email and we will send a secure password reset link.
+              </Text>
 
-                <Controller
-                  control={identityControl}
-                  name="email"
-                  render={({ field, fieldState }) => (
-                    <AppInput
-                      label="Email"
-                      placeholder="Enter email"
-                      value={field.value}
-                      onChangeText={field.onChange}
-                      error={fieldState.error?.message}
-                    />
-                  )}
-                />
-
-                <Controller
-                  control={identityControl}
-                  name="phone"
-                  render={({ field, fieldState }) => (
-                    <View style={{ marginBottom: 14 }}>
-                      <Text style={styles.label}>Phone Number</Text>
-                      <PhoneInput
-                        value={field.value}
-                        onChange={field.onChange}
-                        countryCode="+1"
-                        placeholder="1234567890"
-                        error={fieldState.error?.message}
-                      />
-                    </View>
-                  )}
-                />
-
-                <Controller
-                  control={identityControl}
-                  name="agent"
-                  render={({ field, fieldState }) => (
-                    <AgentSelect
-                      label="Agent Name"
-                      placeholder="Select agent"
-                      value={field.value}
-                      onChange={field.onChange}
-                      options={agentOptions}
-                      error={fieldState.error?.message}
-                    />
-                  )}
-                />
-
-                <Controller
-                  control={identityControl}
-                  name="dob"
-                  render={({ field, fieldState }) => (
-                    <DatePickerField
-                      label="Date of Birth"
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder="MM/DD/YYYY"
-                      error={fieldState.error?.message}
-                    />
-                  )}
-                />
-
-                <View style={{ marginTop: 10 }}>
-                  <AppButton
-                    title="Verify Identity"
-                    onPress={handleIdentitySubmit(onVerifyIdentity)}
-                    disabled={!identityState.isValid}
+              <Controller
+                control={identityControl}
+                name="email"
+                render={({ field, fieldState }) => (
+                  <AppInput
+                    label="Email"
+                    placeholder="Enter email"
+                    value={field.value}
+                    onChangeText={field.onChange}
+                    error={fieldState.error?.message}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
                   />
-                  <AppButton title="Cancel" onPress={closeForgot} variant="ghost" />
-                </View>
-              </ScrollView>
-            ) : (
-              <ScrollView
-                style={{ width: '100%' }}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-              >
-                <Text style={styles.modalTitle}>Set New Password</Text>
-                <Text style={styles.modalSub}>Identity verified. Create a new password.</Text>
+                )}
+              />
 
-                <Controller
-                  control={resetControl}
-                  name="newPassword"
-                  render={({ field, fieldState }) => (
-                    <SimpleResetInput
-                      placeholder="Min 6 chars (Alpha-numeric)"
-                      value={field.value}
-                      onChangeText={field.onChange}
-                      error={fieldState.error?.message}
-                      autoFocus={true}
-                    />
-                  )}
+              <View style={{ marginTop: 10 }}>
+                <AppButton
+                  title="Send Reset Link"
+                  onPress={handleIdentitySubmit(onVerifyIdentity)}
+                  disabled={!identityState.isValid}
                 />
-
-                <View style={{ marginTop: 10 }}>
-                  <AppButton
-                    title="Update Password"
-                    onPress={handleResetSubmit(onFinalizeReset)}
-                    disabled={!resetState.isValid}
-                  />
-                  <AppButton title="Cancel" onPress={closeForgot} variant="ghost" />
-                </View>
-              </ScrollView>
-            )}
+                <AppButton title="Cancel" onPress={closeForgot} variant="ghost" />
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -446,9 +279,6 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 24 },
   footerText: { color: COLORS.textSecondary, fontSize: 14 },
   link: { color: COLORS.accent, fontWeight: 'bold', fontSize: 14 },
-  label: { color: COLORS.textSecondary, marginBottom: 8, fontSize: 13 },
-  err: { color: COLORS.error, marginTop: 6, fontSize: 12 },
-
   /* Modal Styles */
   modalOverlay: {
     flex: 1,
@@ -476,21 +306,4 @@ const styles = StyleSheet.create({
   },
   modalSub: { color: COLORS.textSecondary, fontSize: 14, marginBottom: 20, textAlign: 'center' },
 
-  /* Simple Input Styles */
-  simpleWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0C0E0B',
-    borderRadius: LAYOUT.borderRadius,
-    borderWidth: 1,
-    borderColor: '#2A3028',
-    height: LAYOUT.controlHeight,
-  },
-  simpleInput: {
-    flex: 1,
-    color: COLORS.textPrimary,
-    paddingHorizontal: 12,
-    fontSize: 16,
-    height: '100%',
-  },
 });

@@ -5,7 +5,7 @@ import ScreenContainer from '../components/ScreenContainer';
 import DashboardHeader from '../components/DashboardHeader';
 import AppInput from '../components/AppInput';
 import ConfirmationModal from '../components/ConfirmationModal';
-import { demoStore, User } from '../services/demoStore';
+import { AppUser, firebaseStore } from '../services/firebaseStore';
 import { COLORS } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
@@ -14,7 +14,7 @@ export default function AdminUsers({ navigation }: any) {
   const isFocused = useIsFocused();
   const [search, setSearch] = useState('');
   const [selectedAgent, setSelectedAgent] = useState('All');
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<AppUser[]>([]);
 
   // Delete State
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -23,7 +23,7 @@ export default function AdminUsers({ navigation }: any) {
   // Refresh data when screen focuses (in case edits were made in UserDetails)
   useEffect(() => {
     if (isFocused) {
-      setUsers(demoStore.getAllUsers());
+      firebaseStore.fetchAllUsers().then(setUsers).catch(() => setUsers([]));
     }
   }, [isFocused]);
 
@@ -48,19 +48,20 @@ export default function AdminUsers({ navigation }: any) {
 
   const confirmDelete = () => {
     if (userToDelete) {
-      demoStore.deleteUser(userToDelete.id);
-      setUsers(demoStore.getAllUsers());
+      firebaseStore.deleteAccount(userToDelete.id).then(() => {
+        setUsers((current) => current.filter((user) => user.id !== userToDelete.id));
+      });
     }
     setDeleteModalVisible(false);
     setUserToDelete(null);
   };
 
-  const promptDelete = (u: User) => {
+  const promptDelete = (u: AppUser) => {
     setUserToDelete({ id: u.id, name: `${u.firstName} ${u.lastName}` });
     setDeleteModalVisible(true);
   };
 
-  const renderItem = ({ item }: { item: User }) => (
+  const renderItem = ({ item }: { item: AppUser }) => (
     <TouchableOpacity
       style={styles.card}
       activeOpacity={0.7}

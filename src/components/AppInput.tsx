@@ -61,7 +61,7 @@ export default function AppInput({
         <TextInput
           {...rest}
           editable={editable}
-          style={[styles.input, !editable ? styles.inputDisabled : null]}
+          style={[styles.input, icon ? styles.inputWithIcon : null, !editable ? styles.inputDisabled : null]}
           placeholderTextColor="#7A7A7A"
           onFocus={handleFocus}
           onBlur={handleBlur}
@@ -90,6 +90,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     color: COLORS.textPrimary,
     fontSize: 16,
+  },
+  inputWithIcon: {
+    paddingLeft: 18,
   },
   disabledWrapper: {
     backgroundColor: '#141812',
