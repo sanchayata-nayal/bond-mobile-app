@@ -4,7 +4,6 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from '
 import ScreenContainer from '../components/ScreenContainer';
 import DashboardHeader from '../components/DashboardHeader';
 import AppInput from '../components/AppInput';
-import ConfirmationModal from '../components/ConfirmationModal';
 import { AppUser, firebaseStore } from '../services/firebaseStore';
 import { COLORS } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,14 +15,13 @@ export default function AdminUsers({ navigation }: any) {
   const [selectedAgent, setSelectedAgent] = useState('All');
   const [users, setUsers] = useState<AppUser[]>([]);
 
-  // Delete State
-  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-  const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
-
   // Refresh data when screen focuses (in case edits were made in UserDetails)
   useEffect(() => {
     if (isFocused) {
-      firebaseStore.fetchAllUsers().then(setUsers).catch(() => setUsers([]));
+      firebaseStore
+        .fetchAllUsers()
+        .then(setUsers)
+        .catch(() => setUsers([]));
     }
   }, [isFocused]);
 
@@ -46,20 +44,8 @@ export default function AdminUsers({ navigation }: any) {
     return matchesSearch && matchesAgent;
   });
 
-  const confirmDelete = () => {
-    if (userToDelete) {
-      firebaseStore.deleteAccount(userToDelete.id).then(() => {
-        setUsers((current) => current.filter((user) => user.id !== userToDelete.id));
-      });
-    }
-    setDeleteModalVisible(false);
-    setUserToDelete(null);
-  };
-
-  const promptDelete = (u: AppUser) => {
-    setUserToDelete({ id: u.id, name: `${u.firstName} ${u.lastName}` });
-    setDeleteModalVisible(true);
-  };
+  const promptDelete = (user: AppUser) =>
+    navigation.navigate('UserDetails', { user, requestDelete: true });
 
   const renderItem = ({ item }: { item: AppUser }) => (
     <TouchableOpacity
@@ -139,18 +125,6 @@ export default function AdminUsers({ navigation }: any) {
         style={{ width: '100%' }}
         contentContainerStyle={{ paddingBottom: 40 }}
         ListEmptyComponent={<Text style={styles.empty}>No users found matching criteria.</Text>}
-      />
-
-      {/* Delete Modal */}
-      <ConfirmationModal
-        visible={deleteModalVisible}
-        title="Delete User"
-        message={`Are you sure you want to permanently delete ${userToDelete?.name}?`}
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleteModalVisible(false)}
-        confirmText="Delete"
-        variant="danger"
-        icon="trash-outline"
       />
     </ScreenContainer>
   );

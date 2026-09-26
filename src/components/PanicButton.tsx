@@ -31,10 +31,10 @@ export default function PanicButton({ onPress, disabled }: Props) {
         Animated.sequence([
           Animated.timing(opacity, { toValue: 0, duration: 3000, useNativeDriver: true }),
           Animated.timing(opacity, { toValue: 0.3, duration: 0, useNativeDriver: true }),
-        ])
-      ])
+        ]),
+      ]),
     );
-    
+
     breathe.start();
     return () => breathe.stop();
   }, [disabled]);
@@ -56,6 +56,8 @@ export default function PanicButton({ onPress, disabled }: Props) {
 
       {/* Main Button */}
       <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Prepare emergency message"
         activeOpacity={0.8}
         onPress={onPress}
         disabled={disabled}
@@ -92,7 +94,17 @@ const styles = StyleSheet.create({
     width: BUTTON_SIZE,
     height: BUTTON_SIZE,
     borderRadius: BUTTON_SIZE / 2,
-    // Native shadow
+  },
+  button: {
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
+    borderRadius: BUTTON_SIZE / 2,
+    backgroundColor: COLORS.panic,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.15)',
+    // Put the shadow on the opaque circular surface so Android uses its outline.
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -107,16 +119,6 @@ const styles = StyleSheet.create({
         boxShadow: '0 15px 35px rgba(214, 69, 69, 0.4)',
       } as any,
     }),
-  },
-  button: {
-    width: BUTTON_SIZE,
-    height: BUTTON_SIZE,
-    borderRadius: BUTTON_SIZE / 2,
-    backgroundColor: COLORS.panic,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: 'rgba(255,255,255,0.15)',
   },
   text: {
     color: '#FFFFFF',

@@ -1,0 +1,84 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function owner(uid) { return signedIn() && request.auth.uid == uid; }
+    function active(uid) {
+      return !exists(/databases/$(database)/documents/deletion_locks/$(uid)) &&
+        exists(/databases/$(database)/documents/users/$(uid)) &&
+        get(/databases/$(database)/documents/users/$(uid)).data.get('deletionPending', false) == false;
+    }
+    function admin() {
+      return signedIn() && active(request.auth.uid) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    function contact(c) {
+      return c.keys().hasOnly(['name', 'phone', 'nameKey']) &&
+        c.name is string && c.name.size() > 0 && c.name.size() <= 100 &&
+        c.nameKey == c.name.lower().replace('\\s+', '') && c.nameKey.size() > 0 &&
+        c.phone is string && c.phone.matches('^\\+1[0-9]{10}$');
+    }
+    function contacts(cs) {
+      return cs is list && cs.size() == 3 && contact(cs[0]) && contact(cs[1]) && contact(cs[2]) &&
+        cs[0].nameKey != cs[1].nameKey && cs[0].nameKey != cs[2].nameKey && cs[1].nameKey != cs[2].nameKey &&
+        cs[0].phone != cs[1].phone && cs[0].phone != cs[2].phone && cs[1].phone != cs[2].phone;
+    }
+    function profile(d) {
+      return d.firstName is string && d.firstName.size() > 0 && d.firstName.size() <= 100 &&
+        d.lastName is string && d.lastName.size() > 0 && d.lastName.size() <= 100 &&
+        d.phone.matches('^\\+1[0-9]{10}$') && d.dob.matches('^[0-9]{2}/[0-9]{2}/[0-9]{4}$') &&
+        d.agent is string && d.agent.size() > 0 && d.agent.size() <= 200 &&
+        d.requestedAgentName is string && d.requestedAgentName.size() <= 200 &&
+        d.agentStatus in ['assigned', 'pending'] && contacts(d.emergencyContacts);
+    }
+    match /users/{uid} {
+      allow get: if owner(uid) || admin();
+      allow list: if admin();
+      allow create: if owner(uid) && !exists(/databases/$(database)/documents/deletion_locks/$(uid)) && request.resource.data.keys().hasOnly([
+        'uid', 'email', 'firstName', 'lastName', 'phone', 'dob', 'agent', 'requestedAgentName',
+        'agentStatus', 'emergencyContacts', 'role', 'joinedAt', 'panicCount',
+        'consentGiven', 'consentTimestamp', 'consentText', 'consentVersion'
+      ]) && request.resource.data.uid == uid && request.resource.data.email == request.auth.token.email &&
+        request.resource.data.role == 'user' && request.resource.data.panicCount == 0 &&
+        request.resource.data.consentGiven == true && request.resource.data.consentVersion == '2026-09-26' &&
+        request.resource.data.consentText is string && request.resource.data.consentText.size() > 0 &&
+        request.resource.data.consentText.size() < 10000 && profile(request.resource.data);
+      allow update: if active(uid) && (
+        ((owner(uid) || admin()) && profile(request.resource.data) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'firstName', 'lastName', 'phone', 'dob', 'agent', 'requestedAgentName', 'agentStatus', 'emergencyContacts', 'updatedAt'
+          ])) ||
+        // Agent assignment also supports legacy profiles before their next contact edit.
+        (admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['agent', 'agentStatus', 'requestedAgentName', 'updatedAt'])) ||
+        (owner(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['panicCount', 'lastPanicAt']) &&
+          request.resource.data.panicCount == resource.data.panicCount + 1)
+      );
+      // Deletion is performed by the authenticated server function, including Auth and logs.
+      allow delete: if false;
+    }
+    match /agents/{id} {
+      // Agent directory is intentionally public for the registration picker. Store only directory fields here.
+      allow read: if true;
+      allow create, update: if admin() && request.resource.data.keys().hasOnly(['name', 'normalizedName', 'active', 'createdAt']) &&
+        request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 200;
+      allow delete: if admin();
+    }
+    match /config/global {
+      allow read: if signedIn() && active(request.auth.uid);
+      allow create, update: if admin() && request.resource.data.keys().hasOnly(['primaryCall', 'smsList']) &&
+        request.resource.data.get('primaryCall', '') is string && request.resource.data.get('smsList', []) is list;
+      allow delete: if false;
+    }
+    match /panic_logs/{id} {
+      allow read: if admin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if signedIn() && active(request.auth.uid) &&
+        request.resource.data.keys().hasOnly(['userId', 'userName', 'userPhone', 'agent', 'timestamp', 'location', 'latitude', 'longitude', 'accuracy']) &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.userPhone == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.phone &&
+        request.resource.data.timestamp is string && request.resource.data.location is string &&
+        request.resource.data.location.size() < 500;
+      allow update, delete: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

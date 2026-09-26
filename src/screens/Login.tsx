@@ -25,8 +25,6 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import { EMAIL_ERROR, EMAIL_REGEX } from '../utils/validation';
 
 /* ---------- SCHEMAS ---------- */
-const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/;
-const PASSWORD_ERROR = 'Min 6 chars, letters & numbers required';
 const emailRule = (requiredMessage: string) =>
   yup
     .string()
@@ -38,7 +36,7 @@ const emailRule = (requiredMessage: string) =>
 const loginSchema = yup
   .object({
     email: emailRule('Email required'),
-    password: yup.string().required('Password required').matches(PASSWORD_REGEX, PASSWORD_ERROR),
+    password: yup.string().required('Password required'),
   })
   .required();
 
@@ -104,8 +102,8 @@ export default function Login({ navigation }: any) {
     } catch (error: any) {
       let msg = error.message;
       if (msg.includes('auth/invalid-credential')) msg = 'Invalid email or password.';
-      if (msg.includes('auth/user-not-found')) msg = 'User not found.';
-      if (msg.includes('auth/wrong-password')) msg = 'Incorrect password.';
+      if (msg.includes('auth/user-not-found')) msg = 'Invalid email or password.';
+      if (msg.includes('auth/wrong-password')) msg = 'Invalid email or password.';
       showAlert('Login Failed', msg, 'error');
     } finally {
       setIsLoading(false);
@@ -305,5 +303,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   modalSub: { color: COLORS.textSecondary, fontSize: 14, marginBottom: 20, textAlign: 'center' },
-
 });

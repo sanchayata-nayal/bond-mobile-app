@@ -2,6 +2,15 @@
 
 # dependencies
 node_modules/
+.npm-cache/
+.tools/
+coverage/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+output/dependency-audit.json
+output/audit-fix.txt
+output/dependency-update.txt
 
 # Expo
 .expo/
@@ -32,6 +41,8 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
+service-account*.json
 
 # typescript
 *.tsbuildinfo

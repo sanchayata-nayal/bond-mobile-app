@@ -32,37 +32,37 @@ export default function ConfirmationModal({
   const isSingleButton = cancelText === '';
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.overlay}>
         <View style={styles.card}>
           {icon && (
-            <Ionicons 
-              name={icon} 
-              size={40} 
-              color={variant === 'danger' ? COLORS.panic : COLORS.accent} 
-              style={{ marginBottom: 16 }} 
+            <Ionicons
+              name={icon}
+              size={40}
+              color={variant === 'danger' ? COLORS.panic : COLORS.accent}
+              style={{ marginBottom: 16 }}
             />
           )}
-          
+
           <Text style={styles.title}>{title}</Text>
           {message && <Text style={styles.message}>{message}</Text>}
 
           <View style={styles.row}>
             {!isSingleButton && (
-              <AppButton 
-                title={cancelText} 
-                onPress={onCancel} 
-                variant="ghost" 
-                style={{ flex: 1, marginRight: 8 }} 
+              <AppButton
+                title={cancelText}
+                onPress={onCancel}
+                variant="ghost"
+                style={{ flex: 1, marginRight: 8 }}
               />
             )}
-            
-            <AppButton 
-              title={confirmText} 
-              onPress={onConfirm} 
-              variant={variant === 'danger' ? 'danger' : 'primary'} 
+
+            <AppButton
+              title={confirmText}
+              onPress={onConfirm}
+              variant={variant === 'danger' ? 'danger' : 'primary'}
               // If single button, take full width. If two, take flex 1.
-              style={isSingleButton ? { width: '100%' } : { flex: 1, marginLeft: 8 }} 
+              style={isSingleButton ? { width: '100%' } : { flex: 1, marginLeft: 8 }}
             />
           </View>
         </View>
@@ -90,8 +90,8 @@ const styles = StyleSheet.create({
     borderColor: '#2A3028',
     ...Platform.select({
       web: { boxShadow: '0 20px 50px rgba(0,0,0,0.5)' } as any,
-      default: { elevation: 10 }
-    })
+      default: { elevation: 10 },
+    }),
   },
   title: {
     color: COLORS.textPrimary,
@@ -111,5 +111,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     width: '100%',
     justifyContent: 'center',
-  }
+  },
 });

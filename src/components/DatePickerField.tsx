@@ -1,6 +1,6 @@
 // src/components/DatePickerField.tsx
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform, Keyboard } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { COLORS, LAYOUT } from '../styles/theme';
@@ -23,15 +23,18 @@ export default function DatePickerField({
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
 
   const parseValue = () => {
-    if (!value || value.length !== 10) {
-      return new Date(new Date().setFullYear(new Date().getFullYear() - 18));
-    }
-
-    const [month, day, year] = value.split('/').map((part) => Number(part));
+    const fallback = new Date();
+    fallback.setFullYear(fallback.getFullYear() - 18);
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return fallback;
+    const [month, day, year] = value.split('/').map(Number);
     const parsed = new Date(year, month - 1, day);
-    return Number.isNaN(parsed.getTime())
-      ? new Date(new Date().setFullYear(new Date().getFullYear() - 18))
-      : parsed;
+    return parsed.getFullYear() === year &&
+      parsed.getMonth() === month - 1 &&
+      parsed.getDate() === day &&
+      year >= 1900 &&
+      parsed <= new Date()
+      ? parsed
+      : fallback;
   };
 
   // Helper to format Date object to MM/DD/YYYY
@@ -48,25 +51,6 @@ export default function DatePickerField({
     if (onChange) onChange(formatDate(date));
   };
 
-  // WEB/TEXT: Auto-mask input as MM/DD/YYYY
-  const handleTextChange = (text: string) => {
-    // Remove non-numeric characters
-    let cleaned = text.replace(/[^0-9]/g, '');
-    
-    // Enforce max length (8 digits -> 10 chars)
-    if (cleaned.length > 8) cleaned = cleaned.slice(0, 8);
-
-    let formatted = cleaned;
-    if (cleaned.length > 2) {
-      formatted = `${cleaned.slice(0, 2)}/${cleaned.slice(2)}`;
-    }
-    if (cleaned.length > 4) {
-      formatted = `${formatted.slice(0, 5)}/${cleaned.slice(4)}`;
-    }
-
-    onChange?.(formatted);
-  };
-
   const openPicker = () => {
     Keyboard.dismiss();
     setDatePickerVisibility(true);
@@ -76,24 +60,30 @@ export default function DatePickerField({
     <View style={styles.wrapperOuter}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
 
-      <TouchableOpacity 
-        activeOpacity={1} 
-        onPress={Platform.OS !== 'web' ? openPicker : undefined}
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={openPicker}
+        accessibilityRole="button"
+        accessibilityLabel={`${label || 'Date of birth'}, ${value || 'Choose date'}`}
         style={[styles.inputRow, error ? { borderColor: COLORS.error } : null]}
       >
         <TextInput
           style={styles.input}
           value={value}
-          onChangeText={handleTextChange}
           placeholder={placeholder}
           placeholderTextColor="#7A7A7A"
           keyboardType="number-pad"
           maxLength={10}
-          editable
-          onFocus={Platform.OS !== 'web' ? openPicker : undefined}
+          editable={false}
+          pointerEvents="none"
         />
-        
-        <TouchableOpacity onPress={openPicker} style={styles.iconWrap}>
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Choose date of birth"
+          onPress={openPicker}
+          style={styles.iconWrap}
+        >
           <Ionicons name="calendar-outline" size={20} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </TouchableOpacity>
@@ -108,6 +98,7 @@ export default function DatePickerField({
         // Default to 18 years ago for convenience
         date={parseValue()}
         maximumDate={new Date()}
+        minimumDate={new Date(1900, 0, 1)}
       />
     </View>
   );

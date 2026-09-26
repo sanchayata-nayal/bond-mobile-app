@@ -12,19 +12,27 @@ type Props = {
 
 export default function AppButton({ title, onPress, disabled, variant = 'primary', style }: Props) {
   const bg =
-    variant === 'primary' ? COLORS.accent :
-    variant === 'danger' ? COLORS.panic : 'transparent';
+    variant === 'primary' ? COLORS.accent : variant === 'danger' ? COLORS.panic : 'transparent';
 
   const border = variant === 'ghost' ? { borderWidth: 1, borderColor: '#222' } : {};
 
   return (
     <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
       activeOpacity={0.85}
       onPress={onPress}
       disabled={disabled}
       style={[styles.btn, { backgroundColor: bg, opacity: disabled ? 0.6 : 1 }, border, style]}
     >
-      <Text style={[styles.txt, variant === 'ghost' ? { color: COLORS.textPrimary } : { color: '#0A0A0A' }]}>{title}</Text>
+      <Text
+        style={[
+          styles.txt,
+          variant === 'ghost' ? { color: COLORS.textPrimary } : { color: '#0A0A0A' },
+        ]}
+      >
+        {title}
+      </Text>
     </TouchableOpacity>
   );
 }

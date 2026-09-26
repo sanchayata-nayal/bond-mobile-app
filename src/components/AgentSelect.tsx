@@ -1,5 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  ViewStyle,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, LAYOUT } from '../styles/theme';
 
@@ -51,6 +60,9 @@ export default function AgentSelect({
           error ? styles.triggerError : null,
         ]}
         onPress={() => setOpen((current) => !current)}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ expanded: open }}
         activeOpacity={0.8}
       >
         <View style={styles.triggerLeft}>
@@ -67,32 +79,52 @@ export default function AgentSelect({
       </TouchableOpacity>
 
       {open ? (
-        <View style={[styles.menu, { top: label ? 82 : 60 }]}>
-          <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={agentOptions.length > 4}>
-            {agentOptions.length === 0 ? (
-              <Text style={styles.emptyText}>No agents available</Text>
-            ) : (
-              agentOptions.map((agent, index) => {
-                const active = agent === normalizedValue;
-                return (
-                  <TouchableOpacity
-                    key={`${agent}-${index}`}
-                    style={[styles.item, active ? styles.itemActive : null]}
-                    onPress={() => handleSelect(agent)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.itemText, active ? styles.itemTextActive : null]}>
-                      {getOptionLabel(agent)}
-                    </Text>
-                    {active ? (
-                      <Ionicons name="checkmark-circle" size={18} color={COLORS.background} />
-                    ) : null}
-                  </TouchableOpacity>
-                );
-              })
-            )}
-          </ScrollView>
-        </View>
+        <Modal transparent visible animationType="fade" onRequestClose={() => setOpen(false)}>
+          <Pressable
+            style={styles.overlay}
+            onPress={() => setOpen(false)}
+            accessibilityLabel="Close agent list"
+          >
+            <Pressable style={styles.menu} onPress={() => {}} accessibilityViewIsModal>
+              <Text style={styles.menuTitle}>{label || 'Select agent'}</Text>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={agentOptions.length > 4}
+              >
+                {agentOptions.length === 0 ? (
+                  <Text style={styles.emptyText}>No agents available</Text>
+                ) : (
+                  agentOptions.map((agent, index) => {
+                    const active = agent === normalizedValue;
+                    return (
+                      <TouchableOpacity
+                        key={`${agent}-${index}`}
+                        style={[styles.item, active ? styles.itemActive : null]}
+                        onPress={() => handleSelect(agent)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.itemText, active ? styles.itemTextActive : null]}>
+                          {getOptionLabel(agent)}
+                        </Text>
+                        {active ? (
+                          <Ionicons name="checkmark-circle" size={18} color={COLORS.background} />
+                        ) : null}
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </ScrollView>
+              <TouchableOpacity
+                onPress={() => setOpen(false)}
+                style={styles.item}
+                accessibilityRole="button"
+              >
+                <Text style={styles.itemText}>Cancel</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
       ) : null}
 
       {error ? <Text style={styles.err}>{error}</Text> : null}
@@ -121,16 +153,23 @@ const styles = StyleSheet.create({
   triggerText: { color: COLORS.textPrimary, fontSize: 16, marginLeft: 10 },
   placeholder: { color: '#7A7A7A' },
   menu: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    maxHeight: 220,
+    width: '100%',
+    maxWidth: 480,
+    maxHeight: '70%',
     backgroundColor: '#141812',
     borderWidth: 1,
     borderColor: '#2A3028',
     borderRadius: LAYOUT.borderRadius,
     overflow: 'hidden',
   },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    padding: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuTitle: { color: COLORS.accent, padding: 16, fontSize: 18, fontWeight: '700' },
   item: {
     minHeight: 48,
     paddingHorizontal: 14,

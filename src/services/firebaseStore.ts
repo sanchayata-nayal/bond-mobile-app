@@ -1,12 +1,17 @@
 // src/services/firebaseStore.ts
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
 import {
   DocumentData,
+  writeBatch,
+  increment,
   doc,
   setDoc,
   getDoc,
@@ -20,7 +25,10 @@ import {
   where,
   limit,
 } from 'firebase/firestore';
-import { auth, db } from '../config/firebaseConfig';
+import { auth, db } from '../config/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { normalizeContacts } from '../utils/contacts';
+import { registrationSchema, profileSchema } from '../utils/registrationSchema';
 import { PENDING_AGENT_NAME } from '../utils/agents';
 
 /* --- TYPES --- */
@@ -44,6 +52,7 @@ export type UserProfile = {
   consentGiven: boolean;
   consentTimestamp: string;
   consentText: string;
+  consentVersion: string;
 };
 
 export type AppUser = UserProfile & {
@@ -86,7 +95,9 @@ const uniqueNames = (names: Array<string | undefined>) =>
   Array.from(new Set(names.map((name) => name?.trim()).filter(Boolean))) as string[];
 
 const stripUndefined = <T extends Record<string, any>>(value: T): T =>
-  Object.fromEntries(Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined)) as T;
+  Object.fromEntries(
+    Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined),
+  ) as T;
 
 const toAppUser = (data: DocumentData, fallbackId: string): AppUser => {
   const uid = data.uid || fallbackId;
@@ -112,6 +123,16 @@ export const firebaseStore = {
 
   // 1. Sign Up (Auth + Firestore Profile)
   async registerUser(data: any) {
+    const fields = { ...data };
+    for (const key of ['phone', 'ec1Phone', 'ec2Phone', 'ec3Phone']) {
+      fields[key] = fields[key]?.replace(/^\+1/, '');
+    }
+    await registrationSchema.validate(fields, { abortEarly: false });
+    const emergencyContacts = normalizeContacts([
+      { name: data.ec1Name, phone: data.ec1Phone },
+      { name: data.ec2Name, phone: data.ec2Phone },
+      { name: data.ec3Name, phone: data.ec3Phone },
+    ]);
     try {
       // A. Create Auth User
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
@@ -121,29 +142,31 @@ export const firebaseStore = {
       const newProfile: UserProfile = {
         uid,
         email: data.email.trim().toLowerCase(),
-        firstName: data.firstName,
-        lastName: data.lastName,
+        firstName: data.firstName.trim(),
+        lastName: data.lastName.trim(),
         phone: data.phone,
         dob: data.dob,
         agent: data.agent,
         requestedAgentName: data.requestedAgentName || '',
         agentStatus: data.agentStatus || 'assigned',
-        emergencyContacts: [
-          { name: data.ec1Name, phone: data.ec1Phone },
-          { name: data.ec2Name, phone: data.ec2Phone },
-          { name: data.ec3Name, phone: data.ec3Phone },
-        ],
+        emergencyContacts,
         role: 'user',
         joinedAt: new Date().toISOString(),
         panicCount: 0,
         // Legal Compliance
         consentGiven: true,
         consentTimestamp: data.consentTimestamp || new Date().toISOString(),
-        consentText: data.consentText || 'Standard Disclaimer',
+        consentText: data.consentText,
+        consentVersion: data.consentVersion,
       };
 
       // C. Save to Firestore 'users' collection
-      await setDoc(doc(db, 'users', uid), newProfile);
+      try {
+        await setDoc(doc(db, 'users', uid), newProfile);
+      } catch (error) {
+        await deleteUser(userCredential.user).catch(() => signOut(auth));
+        throw error;
+      }
 
       return toAppUser(newProfile, uid);
     } catch (error: any) {
@@ -167,7 +190,8 @@ export const firebaseStore = {
         throw new Error('User profile not found.');
       }
     } catch (error: any) {
-      throw new Error(error.message);
+      await signOut(auth).catch(() => {});
+      throw error;
     }
   },
 
@@ -178,18 +202,6 @@ export const firebaseStore = {
   async sendPasswordReset(email: string) {
     const cleanEmail = email.trim().toLowerCase();
     await sendPasswordResetEmail(auth, cleanEmail);
-
-    try {
-      const q = query(collection(db, 'users'), where('email', '==', cleanEmail), limit(1));
-      const snap = await getDocs(q);
-      await Promise.all(
-        snap.docs.map((userDoc) =>
-          updateDoc(doc(db, 'users', userDoc.id), { passwordResetRequestedAt: nowIso() }),
-        ),
-      );
-    } catch {
-      // Password reset must not fail if profile timestamp update is blocked by rules.
-    }
   },
 
   // --- USER FEATURES ---
@@ -202,42 +214,78 @@ export const firebaseStore = {
   ) {
     try {
       // Add to 'panic_logs' collection
-      await addDoc(collection(db, 'panic_logs'), stripUndefined({
-        userId: user.uid,
-        userName: `${user.firstName} ${user.lastName}`,
-        userPhone: user.phone,
-        agent: user.agent,
-        timestamp: nowIso(),
-        location: locationLink,
-        latitude: coords?.latitude,
-        longitude: coords?.longitude,
-        accuracy: coords?.accuracy ?? null,
-      }));
+      const batch = writeBatch(db);
+      batch.set(
+        doc(collection(db, 'panic_logs')),
+        stripUndefined({
+          userId: user.uid,
+          userName: `${user.firstName} ${user.lastName}`,
+          userPhone: user.phone,
+          agent: user.agent,
+          timestamp: nowIso(),
+          location: locationLink,
+          latitude: coords?.latitude,
+          longitude: coords?.longitude,
+          accuracy: coords?.accuracy ?? null,
+        }),
+      );
 
       // Increment User's Panic Count
       const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        panicCount: (user.panicCount || 0) + 1,
+      batch.update(userRef, {
+        panicCount: increment(1),
         lastPanicAt: nowIso(),
       });
+      await batch.commit();
     } catch (e) {
-      console.error('Panic Log Error', e);
+      throw e;
     }
   },
 
   async updateUserProfile(uid: string, data: Partial<UserProfile>) {
     const userRef = doc(db, 'users', uid);
-    await updateDoc(userRef, stripUndefined({ ...data, updatedAt: nowIso() }));
+    const allowed = [
+      'firstName',
+      'lastName',
+      'dob',
+      'phone',
+      'agent',
+      'requestedAgentName',
+      'agentStatus',
+      'emergencyContacts',
+    ];
+    if (Object.keys(data).some((key) => !allowed.includes(key)))
+      throw new Error('Unsupported profile update.');
+    const existing = await getDoc(userRef);
+    if (!existing.exists()) throw new Error('User profile not found.');
+    const merged = { ...existing.data(), ...data };
+    const contacts = normalizeContacts(merged.emergencyContacts || []);
+    await profileSchema.validate({
+      ...merged,
+      phone: merged.phone?.replace(/^\+1/, ''),
+      ...Object.fromEntries(
+        contacts.flatMap((c, i) => [
+          [`ec${i + 1}Name`, c.name],
+          [`ec${i + 1}Phone`, c.phone.replace(/^\+1/, '')],
+        ]),
+      ),
+    });
+    await updateDoc(
+      userRef,
+      stripUndefined({ ...data, emergencyContacts: contacts, updatedAt: nowIso() }),
+    );
     const snap = await getDoc(userRef);
     if (!snap.exists()) throw new Error('User profile not found.');
     return toAppUser(snap.data(), uid);
   },
 
-  async deleteAccount(uid: string) {
-    // In a real app, you'd delete the Auth user too, but that requires recent login re-auth.
-    // For MVP, deleting the DB record is often enough to "disable" access.
-    await deleteDoc(doc(db, 'users', uid));
-    // Optional: await auth.currentUser?.delete();
+  async deleteAccount(uid: string, password: string) {
+    const user = auth.currentUser;
+    if (!user?.email || !password) throw new Error('Enter your password to confirm deletion.');
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+    await user.getIdToken(true);
+    const remove = httpsCallable(getFunctions(auth.app), 'deleteAccount');
+    await remove({ uid });
   },
 
   // --- ADMIN FEATURES ---
@@ -253,7 +301,6 @@ export const firebaseStore = {
     } else {
       // Initialize if missing
       const initialData = { primaryCall: '', smsList: [] };
-      await setDoc(docRef, initialData);
       return initialData;
     }
   },
@@ -263,17 +310,17 @@ export const firebaseStore = {
     const newRecipient = { id: Date.now().toString(), name, phone };
     const newList = [...settings.smsList, newRecipient];
 
-    await updateDoc(doc(db, 'config', 'global'), { smsList: newList });
+    await setDoc(doc(db, 'config', 'global'), { smsList: newList }, { merge: true });
   },
 
   async removeRecipient(id: string) {
     const settings = await this.getAdminSettings();
     const newList = settings.smsList.filter((r) => r.id !== id);
-    await updateDoc(doc(db, 'config', 'global'), { smsList: newList });
+    await setDoc(doc(db, 'config', 'global'), { smsList: newList }, { merge: true });
   },
 
   async updatePrimaryCall(phone: string) {
-    await updateDoc(doc(db, 'config', 'global'), { primaryCall: phone });
+    await setDoc(doc(db, 'config', 'global'), { primaryCall: phone }, { merge: true });
   },
 
   // 5. Agents
@@ -378,7 +425,9 @@ export const firebaseStore = {
       .map((user) => ({
         ...user,
         panicCount:
-          period === 'all' ? user.panicCount || alertCounts[user.uid] || 0 : alertCounts[user.uid] || 0,
+          period === 'all'
+            ? user.panicCount || alertCounts[user.uid] || 0
+            : alertCounts[user.uid] || 0,
       }))
       .filter((user) => (user.panicCount || 0) > 0)
       .sort((a, b) => (b.panicCount || 0) - (a.panicCount || 0));

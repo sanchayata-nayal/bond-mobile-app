@@ -60,14 +60,23 @@ export default function AppInput({
         ) : null}
         <TextInput
           {...rest}
+          accessibilityLabel={rest.accessibilityLabel || label || rest.placeholder}
           editable={editable}
-          style={[styles.input, icon ? styles.inputWithIcon : null, !editable ? styles.inputDisabled : null]}
+          style={[
+            styles.input,
+            icon ? styles.inputWithIcon : null,
+            !editable ? styles.inputDisabled : null,
+          ]}
           placeholderTextColor="#7A7A7A"
           onFocus={handleFocus}
           onBlur={handleBlur}
         />
       </Animated.View>
-      {error ? <Text style={styles.err}>{error}</Text> : null}
+      {error ? (
+        <Text accessibilityLiveRegion="polite" style={styles.err}>
+          {error}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -92,7 +101,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   inputWithIcon: {
-    paddingLeft: 18,
+    marginLeft: 12,
+    paddingLeft: 12,
   },
   disabledWrapper: {
     backgroundColor: '#141812',

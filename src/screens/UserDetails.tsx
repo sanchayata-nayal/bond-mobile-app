@@ -26,6 +26,11 @@ import { sessionStore } from '../services/sessionStore';
 import { COLORS, LAYOUT } from '../styles/theme';
 import { useForm, Controller } from 'react-hook-form';
 import { Ionicons } from '@expo/vector-icons';
+import { yupResolver } from '@hookform/resolvers/yup';
+import { profileSchema } from '../utils/registrationSchema';
+import LegalLinks from '../components/LegalLinks';
+import PasswordInput from '../components/PasswordInput';
+import { BUSINESS_NAME } from '../config/legal';
 import { PENDING_AGENT_NAME } from '../utils/agents';
 
 export default function UserDetails({ navigation, route }: any) {
@@ -34,16 +39,22 @@ export default function UserDetails({ navigation, route }: any) {
   const currentUser = sessionStore.getUser();
 
   // Effective user to display (Admin param OR logged in user)
-  const displayUser = paramUser || currentUser;
-  const isAdminMode = !!paramUser;
+  const [displayUser, setDisplayUser] = useState(paramUser || currentUser);
+  const isAdminMode = !!paramUser && paramUser.id !== currentUser?.id;
 
+  const [deletePassword, setDeletePassword] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [saveError, setSaveError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [logoutVisible, setLogoutVisible] = useState(false);
-  const [deleteVisible, setDeleteVisible] = useState(false);
+  const [deleteVisible, setDeleteVisible] = useState(!!route.params?.requestDelete);
   const [successVisible, setSuccessVisible] = useState(false);
   const [agentOptions, setAgentOptions] = useState<string[]>([]);
 
-  const { control, handleSubmit, reset } = useForm({
+  const { control, handleSubmit, reset, formState } = useForm({
+    resolver: yupResolver(profileSchema),
     defaultValues: {
       firstName: '',
       lastName: '',
@@ -95,30 +106,40 @@ export default function UserDetails({ navigation, route }: any) {
   }, [displayUser?.agent]);
 
   const handleSave = async (data: any) => {
-    if (displayUser) {
-      const agent = data.agent;
-      const isPending = agent === PENDING_AGENT_NAME;
-      const updatedUser = await firebaseStore.updateUserProfile(displayUser.id, {
-        firstName: data.firstName,
-        lastName: data.lastName,
-        dob: data.dob,
-        phone: `+1${data.phone}`,
-        agent,
-        requestedAgentName: isPending ? displayUser.requestedAgentName : undefined,
-        agentStatus: isPending ? 'pending' : 'assigned',
-        emergencyContacts: [
-          { name: data.ec1Name, phone: `+1${data.ec1Phone}` },
-          { name: data.ec2Name, phone: `+1${data.ec2Phone}` },
-          { name: data.ec3Name, phone: `+1${data.ec3Phone}` },
-        ],
-      });
+    if (isSaving) return;
+    setIsSaving(true);
+    setSaveError('');
+    try {
+      if (displayUser) {
+        const agent = data.agent;
+        const isPending = agent === PENDING_AGENT_NAME;
+        const updatedUser = await firebaseStore.updateUserProfile(displayUser.id, {
+          firstName: data.firstName,
+          lastName: data.lastName,
+          dob: data.dob,
+          phone: `+1${data.phone}`,
+          agent,
+          requestedAgentName: isPending ? displayUser.requestedAgentName : undefined,
+          agentStatus: isPending ? 'pending' : 'assigned',
+          emergencyContacts: [
+            { name: data.ec1Name, phone: `+1${data.ec1Phone}` },
+            { name: data.ec2Name, phone: `+1${data.ec2Phone}` },
+            { name: data.ec3Name, phone: `+1${data.ec3Phone}` },
+          ],
+        });
 
-      if (!isAdminMode) {
-        sessionStore.updateUser(updatedUser);
+        if (!isAdminMode) {
+          sessionStore.updateUser(updatedUser);
+        }
+
+        setDisplayUser(updatedUser);
+        setIsEditing(false);
+        setSuccessVisible(true);
       }
-
-      setIsEditing(false);
-      setSuccessVisible(true);
+    } catch {
+      setSaveError('Could not save changes. Check your connection and try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -132,16 +153,25 @@ export default function UserDetails({ navigation, route }: any) {
   };
 
   const confirmDelete = async () => {
-    if (displayUser) {
-      await firebaseStore.deleteAccount(displayUser.id);
-
-      if (isAdminMode) {
-        navigation.goBack(); // Go back to list
-      } else {
-        firebaseStore.logout().catch(() => {});
+    if (!displayUser || isDeleting) return;
+    setIsDeleting(true);
+    setDeleteError('');
+    try {
+      await firebaseStore.deleteAccount(displayUser.id, deletePassword);
+      setDeletePassword('');
+      setDeleteVisible(false);
+      if (isAdminMode) navigation.goBack();
+      else {
+        await firebaseStore.logout().catch(() => {});
         sessionStore.clear();
         navigation.reset({ index: 0, routes: [{ name: 'Starting' }] });
       }
+    } catch {
+      setDeleteError(
+        'Deletion did not finish. Check your password and connection, then retry. If this continues, contact support.',
+      );
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -196,15 +226,25 @@ export default function UserDetails({ navigation, route }: any) {
               <Controller
                 control={control}
                 name="firstName"
-                render={({ field }) => (
-                  <AppInput label="First Name" {...field} onChangeText={field.onChange} />
+                render={({ field, fieldState }) => (
+                  <AppInput
+                    error={fieldState.error?.message}
+                    label="First Name"
+                    {...field}
+                    onChangeText={field.onChange}
+                  />
                 )}
               />
               <Controller
                 control={control}
                 name="lastName"
-                render={({ field }) => (
-                  <AppInput label="Last Name" {...field} onChangeText={field.onChange} />
+                render={({ field, fieldState }) => (
+                  <AppInput
+                    error={fieldState.error?.message}
+                    label="Last Name"
+                    {...field}
+                    onChangeText={field.onChange}
+                  />
                 )}
               />
               <AppInput
@@ -216,8 +256,9 @@ export default function UserDetails({ navigation, route }: any) {
               <Controller
                 control={control}
                 name="dob"
-                render={({ field }) => (
+                render={({ field, fieldState }) => (
                   <DatePickerField
+                    error={fieldState.error?.message}
                     label="Date of Birth"
                     value={field.value}
                     onChange={field.onChange}
@@ -227,8 +268,9 @@ export default function UserDetails({ navigation, route }: any) {
               <Controller
                 control={control}
                 name="phone"
-                render={({ field }) => (
+                render={({ field, fieldState }) => (
                   <AppInput
+                    error={fieldState.error?.message}
                     label="Phone"
                     keyboardType="phone-pad"
                     {...field}
@@ -239,8 +281,9 @@ export default function UserDetails({ navigation, route }: any) {
               <Controller
                 control={control}
                 name="agent"
-                render={({ field }) => (
+                render={({ field, fieldState }) => (
                   <AgentSelect
+                    error={fieldState.error?.message}
                     label="Agent Name"
                     placeholder="Select assigned agent"
                     value={field.value}
@@ -254,19 +297,25 @@ export default function UserDetails({ navigation, route }: any) {
               <Text style={styles.sectionTitle}>Emergency Contacts</Text>
               <View style={{ height: 12 }} />
 
-              <Collapsible title="Contact 1">
+              <Collapsible startOpen title="Contact 1">
                 <Controller
                   control={control}
                   name="ec1Name"
-                  render={({ field }) => (
-                    <AppInput label="Name" {...field} onChangeText={field.onChange} />
+                  render={({ field, fieldState }) => (
+                    <AppInput
+                      error={fieldState.error?.message}
+                      label="Name"
+                      {...field}
+                      onChangeText={field.onChange}
+                    />
                   )}
                 />
                 <Controller
                   control={control}
                   name="ec1Phone"
-                  render={({ field }) => (
+                  render={({ field, fieldState }) => (
                     <AppInput
+                      error={fieldState.error?.message}
                       label="Phone"
                       keyboardType="phone-pad"
                       {...field}
@@ -275,19 +324,25 @@ export default function UserDetails({ navigation, route }: any) {
                   )}
                 />
               </Collapsible>
-              <Collapsible title="Contact 2">
+              <Collapsible startOpen title="Contact 2">
                 <Controller
                   control={control}
                   name="ec2Name"
-                  render={({ field }) => (
-                    <AppInput label="Name" {...field} onChangeText={field.onChange} />
+                  render={({ field, fieldState }) => (
+                    <AppInput
+                      error={fieldState.error?.message}
+                      label="Name"
+                      {...field}
+                      onChangeText={field.onChange}
+                    />
                   )}
                 />
                 <Controller
                   control={control}
                   name="ec2Phone"
-                  render={({ field }) => (
+                  render={({ field, fieldState }) => (
                     <AppInput
+                      error={fieldState.error?.message}
                       label="Phone"
                       keyboardType="phone-pad"
                       {...field}
@@ -296,19 +351,25 @@ export default function UserDetails({ navigation, route }: any) {
                   )}
                 />
               </Collapsible>
-              <Collapsible title="Contact 3">
+              <Collapsible startOpen title="Contact 3">
                 <Controller
                   control={control}
                   name="ec3Name"
-                  render={({ field }) => (
-                    <AppInput label="Name" {...field} onChangeText={field.onChange} />
+                  render={({ field, fieldState }) => (
+                    <AppInput
+                      error={fieldState.error?.message}
+                      label="Name"
+                      {...field}
+                      onChangeText={field.onChange}
+                    />
                   )}
                 />
                 <Controller
                   control={control}
                   name="ec3Phone"
-                  render={({ field }) => (
+                  render={({ field, fieldState }) => (
                     <AppInput
+                      error={fieldState.error?.message}
                       label="Phone"
                       keyboardType="phone-pad"
                       {...field}
@@ -318,6 +379,12 @@ export default function UserDetails({ navigation, route }: any) {
                 />
               </Collapsible>
 
+              {saveError ? <Text style={{ color: COLORS.error }}>{saveError}</Text> : null}
+              {Object.keys(formState.errors).length ? (
+                <Text style={{ color: COLORS.error }}>
+                  Please correct the highlighted fields above.
+                </Text>
+              ) : null}
               <View style={styles.editActions}>
                 <AppButton
                   title="Cancel"
@@ -329,7 +396,8 @@ export default function UserDetails({ navigation, route }: any) {
                   style={{ flex: 1, marginRight: 8 }}
                 />
                 <AppButton
-                  title="Save Changes"
+                  title={isSaving ? 'Saving...' : 'Save Changes'}
+                  disabled={isSaving}
                   onPress={handleSubmit(handleSave)}
                   style={{ flex: 1, marginLeft: 8 }}
                 />
@@ -400,8 +468,8 @@ export default function UserDetails({ navigation, route }: any) {
 
         {!isAdminMode && (
           <View style={styles.footer}>
-            <Text style={styles.footerTitle}>All State Bail Bond Services</Text>
-            <Text style={styles.footerText}>0007 A Happy Suite Z, North East City</Text>
+            <Text style={styles.footerTitle}>{BUSINESS_NAME}</Text>
+            <LegalLinks />
           </View>
         )}
       </KeyboardAvoidingView>
@@ -422,15 +490,55 @@ export default function UserDetails({ navigation, route }: any) {
         variant="danger"
       />
 
-      <ConfirmationModal
+      <Modal
         visible={deleteVisible}
-        title={isAdminMode ? 'Delete User' : 'Delete Account'}
-        message="This action is permanent. Are you sure?"
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleteVisible(false)}
-        confirmText="Delete"
-        variant="danger"
-      />
+        transparent
+        animationType="fade"
+        onRequestClose={() => !isDeleting && setDeleteVisible(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            justifyContent: 'center',
+            padding: 24,
+            backgroundColor: 'rgba(0,0,0,0.85)',
+          }}
+        >
+          <View style={[styles.card, { maxWidth: 480, alignSelf: 'center' }]}>
+            <Text style={styles.sectionTitle}>
+              {isAdminMode ? 'Delete User' : 'Delete Account'}
+            </Text>
+            <Text style={{ color: COLORS.textSecondary, marginVertical: 16 }}>
+              Permanently delete the login, profile, consent record, and panic history. Messages
+              already sent cannot be recalled. Enter your own password to confirm.
+            </Text>
+            <PasswordInput
+              label="Your password"
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+            />
+            {deleteError ? (
+              <Text style={{ color: COLORS.error, marginBottom: 12 }}>{deleteError}</Text>
+            ) : null}
+            <AppButton
+              title={isDeleting ? 'Deleting...' : 'Permanently delete'}
+              onPress={confirmDelete}
+              disabled={isDeleting}
+              variant="danger"
+            />
+            <AppButton
+              title="Cancel"
+              onPress={() => {
+                setDeleteVisible(false);
+                setDeletePassword('');
+                setDeleteError('');
+              }}
+              disabled={isDeleting}
+              variant="ghost"
+            />
+          </View>
+        </View>
+      </Modal>
 
       <ConfirmationModal
         visible={successVisible}
