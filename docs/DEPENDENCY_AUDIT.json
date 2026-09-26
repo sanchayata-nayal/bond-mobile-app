@@ -1,0 +1,203 @@
+{
+  "app": {
+    "counts": {
+      "info": 0,
+      "low": 0,
+      "moderate": 11,
+      "high": 2,
+      "critical": 0,
+      "total": 13
+    },
+    "packages": [
+      {
+        "name": "@expo/cli",
+        "severity": "moderate",
+        "fix": {
+          "name": "expo",
+          "version": "57.0.25",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@expo/config",
+        "severity": "moderate",
+        "fix": {
+          "name": "expo",
+          "version": "57.0.25",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@expo/config-plugins",
+        "severity": "moderate",
+        "fix": {
+          "name": "expo",
+          "version": "57.0.25",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@expo/metro-config",
+        "severity": "moderate",
+        "fix": {
+          "name": "expo",
+          "version": "57.0.25",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@expo/prebuild-config",
+        "severity": "moderate",
+        "fix": true
+      },
+      {
+        "name": "expo",
+        "severity": "moderate",
+        "fix": {
+          "name": "expo",
+          "version": "57.0.25",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "expo-asset",
+        "severity": "moderate",
+        "fix": {
+          "name": "expo",
+          "version": "57.0.25",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "expo-constants",
+        "severity": "moderate",
+        "fix": {
+          "name": "expo",
+          "version": "57.0.25",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "expo-linking",
+        "severity": "moderate",
+        "fix": {
+          "name": "expo-linking",
+          "version": "57.0.11",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "image-size",
+        "severity": "high",
+        "fix": true
+      },
+      {
+        "name": "postcss",
+        "severity": "high",
+        "fix": {
+          "name": "expo",
+          "version": "57.0.25",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "uuid",
+        "severity": "moderate",
+        "fix": {
+          "name": "expo",
+          "version": "57.0.25",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "xcode",
+        "severity": "moderate",
+        "fix": {
+          "name": "expo",
+          "version": "57.0.25",
+          "isSemVerMajor": true
+        }
+      }
+    ]
+  },
+  "backend": {
+    "counts": {
+      "info": 0,
+      "low": 0,
+      "moderate": 8,
+      "high": 0,
+      "critical": 0,
+      "total": 8
+    },
+    "packages": [
+      {
+        "name": "@google-cloud/firestore",
+        "severity": "moderate",
+        "fix": {
+          "name": "firebase-admin",
+          "version": "14.5.0",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "@google-cloud/storage",
+        "severity": "moderate",
+        "fix": {
+          "name": "firebase-admin",
+          "version": "14.5.0",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "firebase-admin",
+        "severity": "moderate",
+        "fix": {
+          "name": "firebase-admin",
+          "version": "14.5.0",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "gaxios",
+        "severity": "moderate",
+        "fix": true
+      },
+      {
+        "name": "google-gax",
+        "severity": "moderate",
+        "fix": {
+          "name": "firebase-admin",
+          "version": "14.5.0",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "retry-request",
+        "severity": "moderate",
+        "fix": {
+          "name": "firebase-admin",
+          "version": "14.5.0",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "teeny-request",
+        "severity": "moderate",
+        "fix": {
+          "name": "firebase-admin",
+          "version": "14.5.0",
+          "isSemVerMajor": true
+        }
+      },
+      {
+        "name": "uuid",
+        "severity": "moderate",
+        "fix": {
+          "name": "firebase-admin",
+          "version": "14.5.0",
+          "isSemVerMajor": true
+        }
+      }
+    ]
+  }
+}

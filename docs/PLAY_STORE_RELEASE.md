@@ -37,6 +37,8 @@ Repeat the reviewed deployment/configuration for production only after staging c
 
 ## 4. Configure Expo/EAS
 
+Before preparing a production binary, resolve or assess the remaining dependency advisories listed in `VALIDATION.md` and `DEPENDENCY_AUDIT.json`. Compatible updates removed the critical findings, but this is not a clean security audit. Any SDK migration needs a separate native regression test pass.
+
 Create or use an Expo account, then from this folder run:
 
 ```powershell

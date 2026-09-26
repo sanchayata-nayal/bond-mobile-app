@@ -11,6 +11,7 @@ ui-debug.log
 output/dependency-audit.json
 output/audit-fix.txt
 output/dependency-update.txt
+output/functions-audit.json
 
 # Expo
 .expo/
